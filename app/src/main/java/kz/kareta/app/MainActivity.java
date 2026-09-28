@@ -696,6 +696,10 @@ public final class MainActivity extends Activity {
             out.put("androidSdk", Build.VERSION.SDK_INT);
             out.put("device", Build.MANUFACTURER + " " + Build.MODEL);
             out.put("elmTransport", "classic_spp");
+            out.put("nativeCapabilities", new JSONArray()
+                    .put("elm327").put("camera").put("images")
+                    .put("contacts").put("location").put("scanner")
+                    .put("actionSheet").put("offlineQueue"));
         } catch (Exception ignored) {}
         return out;
     }
