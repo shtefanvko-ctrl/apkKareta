@@ -738,7 +738,9 @@ public final class MainActivity extends Activity {
             out.put("nativeCapabilities", new JSONArray()
                     .put("elm327").put("camera").put("images")
                     .put("contacts").put("location").put("scanner")
-                    .put("actionSheet").put("offlineQueue"));
+                    .put("actionSheet").put("offlineQueue")
+                    .put("webFileChooser").put("webCamera")
+                    .put("webMicrophone").put("webGeolocation"));
         } catch (Exception ignored) {}
         return out;
     }
