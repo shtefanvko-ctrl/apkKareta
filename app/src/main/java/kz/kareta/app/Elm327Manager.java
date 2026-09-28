@@ -68,6 +68,7 @@ final class Elm327Manager {
 
     Elm327Manager(Context context) {
         this.context = context.getApplicationContext();
+        prefs = this.context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         BluetoothManager manager =
                 (BluetoothManager) this.context.getSystemService(Context.BLUETOOTH_SERVICE);
         adapter = manager == null ? null : manager.getAdapter();
