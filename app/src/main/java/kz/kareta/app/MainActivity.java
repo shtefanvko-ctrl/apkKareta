@@ -1,7 +1,6 @@
 package kz.kareta.app;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
@@ -33,6 +32,7 @@ import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -44,6 +44,8 @@ import android.webkit.WebStorage;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
+import androidx.activity.ComponentActivity;
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;
@@ -69,7 +71,7 @@ import java.io.File;
 import java.util.Collections;
 import java.util.Locale;
 
-public final class MainActivity extends Activity {
+public final class MainActivity extends ComponentActivity {
     private static final String BASE_URL = "https://s.kareta.kz/";
     private static final String BASE_HOST = "s.kareta.kz";
     private static final int NATIVE_API_VERSION = 6;
@@ -109,6 +111,18 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack();
+                    return;
+                }
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+            }
+        });
 
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
@@ -213,6 +227,16 @@ public final class MainActivity extends Activity {
                         && errorResponse.getStatusCode() >= 500) {
                     showLoadError("s.kareta.kz вернул HTTP " + errorResponse.getStatusCode() + ".");
                 }
+            }
+
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                handler.removeCallbacks(pageTimeout);
+                if (root != null) root.removeView(view);
+                try { view.destroy(); } catch (Throwable ignored) {}
+                if (webView == view) webView = null;
+                recreate();
+                return true;
             }
         });
     }
@@ -597,6 +621,14 @@ public final class MainActivity extends Activity {
 
     private void requestSingleLocation(LocationManager manager,
                                        JavaScriptReplyProxy reply, String id) {
+        boolean granted =
+                checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        if (!granted) {
+            replyError(reply, id, "LOCATION_PERMISSION_REQUIRED", "Сначала разрешите геолокацию.");
+            return;
+        }
+
         final boolean[] completed = {false};
         final LocationListener[] holder = new LocationListener[1];
         holder[0] = location -> {
@@ -994,12 +1026,6 @@ public final class MainActivity extends Activity {
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         if (webView != null) webView.saveState(outState);
         super.onSaveInstanceState(outState);
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
     }
 
     @Override
