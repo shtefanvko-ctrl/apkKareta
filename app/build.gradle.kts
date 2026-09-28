@@ -30,5 +30,6 @@ android {
 
 dependencies {
     implementation("androidx.core:core:1.17.0")
-    implementation("androidx.webkit:webkit:1.17.1")\n    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    implementation("androidx.webkit:webkit:1.17.1")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }
