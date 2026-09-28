@@ -1,5 +1,6 @@
 package kz.kareta.app;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 
@@ -131,6 +132,7 @@ final class OfflineQueue {
         }
     }
 
+    @SuppressLint("ApplySharedPref") // Durable queue must reach storage before the bridge acknowledges enqueue/ack.
     private void write(JSONArray items) {
         prefs.edit().putString(KEY, items.toString()).commit();
     }
