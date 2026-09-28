@@ -9,6 +9,11 @@
 - Separates native-camera and WebView-camera result state to prevent callback collisions.
 - Disables Android app-data backup for WebView/session privacy.
 - CI now requires both lintDebug and assembleDebug before publishing the APK artifact.
+- Replaces legacy back handling with AndroidX OnBackPressedDispatcher for gesture navigation.
+- Adds explicit location permission proof at the LocationManager call site.
+- Handles WebView renderer termination instead of allowing the process-loss path to crash the shell.
+- Declares camera package visibility and disables cloud/device-transfer extraction of app session data.
+- Bluetooth permission-sensitive ELM calls are lint-annotated only where a runtime guard already exists.
 
 ## 1.4.2 — Native API 6
 
