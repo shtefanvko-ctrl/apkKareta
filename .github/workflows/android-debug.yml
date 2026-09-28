@@ -31,10 +31,10 @@ jobs:
         with:
           gradle-version: "8.13"
       - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon :app:lintDebug :app:assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KARETA-1.4.2-debug
+          name: KARETA-1.4.3-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
