@@ -1,6 +1,7 @@
 package kz.kareta.app;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
@@ -159,6 +160,7 @@ public final class MainActivity extends ComponentActivity {
         }
     }
 
+    @SuppressLint("SetJavaScriptEnabled") // SPA requires JS; Native API is restricted to the trusted HTTPS origin.
     private void configureWebView() {
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(16, 18, 22));
@@ -241,6 +243,7 @@ public final class MainActivity extends ComponentActivity {
         });
     }
 
+    @SuppressLint("RequiresFeature") // Guarded by WebViewFeature.isFeatureSupported below.
     private void installNativeBridge() {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             showLoadError("Системный Android WebView слишком старый для Native API 6.");
@@ -921,6 +924,7 @@ public final class MainActivity extends ComponentActivity {
         postReply(reply, response.toString());
     }
 
+    @SuppressLint("RequiresFeature") // Reply proxies only exist after the guarded WEB_MESSAGE_LISTENER registration.
     private void postReply(JavaScriptReplyProxy reply, String text) {
         if (reply == null) return;
         runOnUiThread(() -> {
