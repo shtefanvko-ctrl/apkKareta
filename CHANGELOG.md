@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.3 — WebView media hardening
+
+- Declares the FileProvider required by native and WebView camera capture.
+- Restores HTML file inputs in WebView, including image capture when camera permission is granted.
+- Restores trusted-origin WebRTC camera/microphone permission handling.
+- Restores trusted-origin WebView geolocation prompts.
+- Separates native-camera and WebView-camera result state to prevent callback collisions.
+- Disables Android app-data backup for WebView/session privacy.
+- CI now requires both lintDebug and assembleDebug before publishing the APK artifact.
+
 ## 1.4.2 — Native API 6
 
 - Web UI remains hosted at https://s.kareta.kz/.
