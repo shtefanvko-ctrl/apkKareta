@@ -242,10 +242,10 @@ final class Elm327Manager {
         String voltageRaw = commandDirect("ATRV", 2600);
 
         JSONObject out = new JSONObject();
-        out.put("rpm", parseRpm(rpmRaw));
-        out.put("speedKph", parseOneBytePid(speedRaw, "410D", 0));
-        out.put("coolantC", parseOneBytePid(coolantRaw, "4105", -40));
-        out.put("voltageV", parseVoltage(voltageRaw));
+        putNumber(out, "rpm", parseRpm(rpmRaw));
+        putNumber(out, "speedKph", parseOneBytePid(speedRaw, "410D", 0));
+        putNumber(out, "coolantC", parseOneBytePid(coolantRaw, "4105", -40));
+        putNumber(out, "voltageV", parseVoltage(voltageRaw));
         out.put("protocol", protocol);
         out.put("adapterName", deviceName);
         out.put("adapterAddress", deviceAddress);
@@ -384,6 +384,11 @@ final class Elm327Manager {
             default:
                 throw new IllegalArgumentException("Команда запрещена Native API 6.");
         }
+    }
+
+    private void putNumber(JSONObject out, String key, double value) throws JSONException {
+        if (Double.isNaN(value) || Double.isInfinite(value)) out.put(key, JSONObject.NULL);
+        else out.put(key, value);
     }
 
     private JSONArray parseDtc(String raw) {
