@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Kareta" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/kareta_dark</item>
+        <item name="android:navigationBarColor">@color/kareta_dark</item>
+        <item name="android:windowBackground">@color/kareta_dark</item>
+        <item name="android:colorAccent">@color/kareta_orange</item>
+    </style>
+    <style name="Theme.Kareta.Splash" parent="Theme.Kareta">
+        <item name="android:windowBackground">@color/kareta_splash_bg</item>
+    </style>
+</resources>
