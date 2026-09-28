@@ -1,6 +1,7 @@
 package kz.kareta.app;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
@@ -97,6 +98,7 @@ final class Elm327Manager {
         return out;
     }
 
+    @SuppressLint("MissingPermission")
     JSONObject devices() throws Exception {
         requireBluetooth();
         Set<BluetoothDevice> bonded = adapter.getBondedDevices();
@@ -262,6 +264,7 @@ final class Elm327Manager {
         return out;
     }
 
+    @SuppressLint("MissingPermission")
     private void connectBlocking(String address) throws Exception {
         requireBluetooth();
         if (!BluetoothAdapter.checkBluetoothAddress(address)) {
@@ -522,6 +525,7 @@ final class Elm327Manager {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private String safeName(BluetoothDevice device) {
         try {
             String name = device.getName();
