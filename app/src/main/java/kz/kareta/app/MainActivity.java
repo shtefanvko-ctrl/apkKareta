@@ -31,10 +31,14 @@ import android.provider.Settings;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.webkit.GeolocationPermissions;
+import android.webkit.PermissionRequest;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebStorage;
 import android.webkit.WebViewClient;
@@ -73,6 +77,9 @@ public final class MainActivity extends Activity {
     private static final int REQ_IMAGE_PICK = 4102;
     private static final int REQ_CAMERA = 4103;
     private static final int REQ_CONTACT = 4104;
+    private static final int REQ_WEB_FILE_CHOOSER = 4105;
+    private static final int REQ_WEB_PERMISSION = 4106;
+    private static final int REQ_WEB_GEOLOCATION = 4107;
     private static final long PAGE_TIMEOUT_MS = 30000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -87,6 +94,11 @@ public final class MainActivity extends Activity {
     private JavaScriptReplyProxy pendingNativeReply;
     private String pendingNativeId = "";
     private Uri pendingCameraUri;
+    private Uri pendingWebCameraUri;
+    private ValueCallback<Uri[]> pendingWebFileCallback;
+    private PermissionRequest pendingWebPermissionRequest;
+    private GeolocationPermissions.Callback pendingGeoCallback;
+    private String pendingGeoOrigin;
 
     private final Runnable pageTimeout = () -> {
         if (!pageLoaded && webView != null) {
@@ -149,12 +161,17 @@ public final class MainActivity extends Activity {
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setGeolocationEnabled(true);
+        settings.setSupportZoom(false);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
         settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.4.2");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
         cookies.setAcceptThirdPartyCookies(webView, false);
 
+        webView.setWebChromeClient(new KaretaChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(
@@ -440,6 +457,28 @@ public final class MainActivity extends Activity {
                                            @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == REQ_WEB_PERMISSION) {
+            PermissionRequest request = pendingWebPermissionRequest;
+            pendingWebPermissionRequest = null;
+            if (request != null) grantTrustedWebResources(request);
+            return;
+        }
+
+        if (requestCode == REQ_WEB_GEOLOCATION) {
+            GeolocationPermissions.Callback callback = pendingGeoCallback;
+            String origin = pendingGeoOrigin;
+            pendingGeoCallback = null;
+            pendingGeoOrigin = null;
+            if (callback != null && origin != null) {
+                boolean granted =
+                        checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                        checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                callback.invoke(origin, granted, false);
+            }
+            return;
+        }
+
         if (requestCode != REQ_PERMISSION) return;
         PendingPermission pending = pendingPermission;
         pendingPermission = null;
@@ -883,6 +922,20 @@ public final class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == REQ_WEB_FILE_CHOOSER && pendingWebFileCallback != null) {
+            Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+            if ((result == null || result.length == 0)
+                    && resultCode == RESULT_OK
+                    && pendingWebCameraUri != null) {
+                result = new Uri[]{pendingWebCameraUri};
+            }
+            pendingWebFileCallback.onReceiveValue(result);
+            pendingWebFileCallback = null;
+            pendingWebCameraUri = null;
+            return;
+        }
+
         JavaScriptReplyProxy reply = pendingNativeReply;
         String id = pendingNativeId;
 
@@ -951,11 +1004,175 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         if (elm != null) elm.shutdown();
+        if (pendingWebFileCallback != null) {
+            try { pendingWebFileCallback.onReceiveValue(null); } catch (Throwable ignored) {}
+            pendingWebFileCallback = null;
+        }
+        if (pendingWebPermissionRequest != null) {
+            try { pendingWebPermissionRequest.deny(); } catch (Throwable ignored) {}
+            pendingWebPermissionRequest = null;
+        }
+        if (pendingGeoCallback != null && pendingGeoOrigin != null) {
+            try { pendingGeoCallback.invoke(pendingGeoOrigin, false, false); } catch (Throwable ignored) {}
+            pendingGeoCallback = null;
+            pendingGeoOrigin = null;
+        }
         if (webView != null) {
             webView.stopLoading();
+            webView.setWebChromeClient(null);
+            webView.setWebViewClient(null);
             webView.destroy();
         }
         super.onDestroy();
+    }
+
+    private final class KaretaChromeClient extends WebChromeClient {
+        @Override
+        public boolean onShowFileChooser(
+                WebView view,
+                ValueCallback<Uri[]> callback,
+                FileChooserParams params) {
+            if (pendingWebFileCallback != null) {
+                try { pendingWebFileCallback.onReceiveValue(null); } catch (Throwable ignored) {}
+            }
+            pendingWebFileCallback = callback;
+            pendingWebCameraUri = null;
+
+            try {
+                Intent picker = params.createIntent();
+                picker.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,
+                        params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
+
+                java.util.ArrayList<Intent> initialIntents = new java.util.ArrayList<>();
+                boolean wantsImage = false;
+                String[] accept = params.getAcceptTypes();
+                if (accept == null || accept.length == 0) {
+                    wantsImage = true;
+                } else {
+                    for (String type : accept) {
+                        if (type == null || type.isEmpty() || type.startsWith("image/")) {
+                            wantsImage = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (wantsImage
+                        && checkSelfPermission(Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED) {
+                    File dir = new File(getCacheDir(), "camera");
+                    if (!dir.exists() && !dir.mkdirs()) {
+                        throw new IllegalStateException("CAMERA_CACHE_UNAVAILABLE");
+                    }
+                    File photo = File.createTempFile("kareta_web_", ".jpg", dir);
+                    Uri uri = FileProvider.getUriForFile(
+                            MainActivity.this, getPackageName() + ".files", photo);
+                    Intent camera = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                    camera.putExtra(MediaStore.EXTRA_OUTPUT, uri);
+                    camera.addFlags(
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    if (camera.resolveActivity(getPackageManager()) != null) {
+                        pendingWebCameraUri = uri;
+                        initialIntents.add(camera);
+                    }
+                }
+
+                Intent chooser = new Intent(Intent.ACTION_CHOOSER);
+                chooser.putExtra(Intent.EXTRA_INTENT, picker);
+                chooser.putExtra(Intent.EXTRA_TITLE, "Выберите файл или фото");
+                if (!initialIntents.isEmpty()) {
+                    chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS,
+                            initialIntents.toArray(new Intent[0]));
+                }
+                startActivityForResult(chooser, REQ_WEB_FILE_CHOOSER);
+                return true;
+            } catch (Throwable error) {
+                pendingWebFileCallback = null;
+                pendingWebCameraUri = null;
+                return false;
+            }
+        }
+
+        @Override
+        public void onPermissionRequest(PermissionRequest request) {
+            if (request == null || !isTrustedUri(request.getOrigin())) {
+                if (request != null) request.deny();
+                return;
+            }
+
+            java.util.ArrayList<String> runtime = new java.util.ArrayList<>();
+            for (String resource : request.getResources()) {
+                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)
+                        && checkSelfPermission(Manifest.permission.CAMERA)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    runtime.add(Manifest.permission.CAMERA);
+                } else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)
+                        && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    runtime.add(Manifest.permission.RECORD_AUDIO);
+                }
+            }
+
+            pendingWebPermissionRequest = request;
+            if (runtime.isEmpty()) {
+                grantTrustedWebResources(request);
+                pendingWebPermissionRequest = null;
+                return;
+            }
+            requestPermissions(runtime.toArray(new String[0]), REQ_WEB_PERMISSION);
+        }
+
+        @Override
+        public void onGeolocationPermissionsShowPrompt(
+                String origin,
+                GeolocationPermissions.Callback callback) {
+            Uri uri = origin == null ? null : Uri.parse(origin);
+            if (!isTrustedUri(uri)) {
+                callback.invoke(origin, false, false);
+                return;
+            }
+
+            boolean granted =
+                    checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                    checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            if (granted) {
+                callback.invoke(origin, true, false);
+                return;
+            }
+
+            pendingGeoOrigin = origin;
+            pendingGeoCallback = callback;
+            requestPermissions(
+                    new String[]{
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                    },
+                    REQ_WEB_GEOLOCATION);
+        }
+    }
+
+    private void grantTrustedWebResources(PermissionRequest request) {
+        if (request == null || !isTrustedUri(request.getOrigin())) {
+            if (request != null) request.deny();
+            return;
+        }
+
+        java.util.ArrayList<String> granted = new java.util.ArrayList<>();
+        for (String resource : request.getResources()) {
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)
+                    && checkSelfPermission(Manifest.permission.CAMERA)
+                    == PackageManager.PERMISSION_GRANTED) {
+                granted.add(resource);
+            } else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)
+                    && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                    == PackageManager.PERMISSION_GRANTED) {
+                granted.add(resource);
+            }
+        }
+
+        if (granted.isEmpty()) request.deny();
+        else request.grant(granted.toArray(new String[0]));
     }
 
     private static final class PendingPermission {
