@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Kareta.Splash" parent="Theme.Kareta">
+        <item name="android:windowSplashScreenBackground">@color/kareta_splash_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/kareta_mark_vector</item>
+    </style>
+</resources>
