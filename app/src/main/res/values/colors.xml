@@ -2,7 +2,6 @@
 <resources>
     <color name="kareta_orange">#FF6A00</color>
     <color name="kareta_dark">#101216</color>
-    <color name="kareta_white">#FFFFFF</color>
     <color name="kareta_splash_bg">#FFFFFF</color>
     <color name="kareta_icon_background">#FFFFFF</color>
 </resources>
