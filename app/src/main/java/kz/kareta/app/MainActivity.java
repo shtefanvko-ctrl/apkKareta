@@ -2,13 +2,19 @@ package kz.kareta.app;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Color;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -19,6 +25,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.provider.ContactsContract;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -28,10 +36,12 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebStorage;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -42,10 +52,16 @@ import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
+import com.google.mlkit.vision.barcode.common.Barcode;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanner;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.Locale;
 
@@ -53,7 +69,10 @@ public final class MainActivity extends Activity {
     private static final String BASE_URL = "https://s.kareta.kz/";
     private static final String BASE_HOST = "s.kareta.kz";
     private static final int NATIVE_API_VERSION = 6;
-    private static final int REQ_BLUETOOTH = 4101;
+    private static final int REQ_PERMISSION = 4101;
+    private static final int REQ_IMAGE_PICK = 4102;
+    private static final int REQ_CAMERA = 4103;
+    private static final int REQ_CONTACT = 4104;
     private static final long PAGE_TIMEOUT_MS = 30000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -64,7 +83,10 @@ public final class MainActivity extends Activity {
     private OfflineQueue offlineQueue;
     private boolean pageLoaded;
 
-    private PendingPermission pendingBluetooth;
+    private PendingPermission pendingPermission;
+    private JavaScriptReplyProxy pendingNativeReply;
+    private String pendingNativeId = "";
+    private Uri pendingCameraUri;
 
     private final Runnable pageTimeout = () -> {
         if (!pageLoaded && webView != null) {
@@ -231,6 +253,35 @@ public final class MainActivity extends Activity {
                 requestPermission(payload.optString("permission", ""), id, reply);
                 return;
 
+            case "pushToken":
+                replyOk(reply, id, json("token", "", "configured", false));
+                return;
+            case "registerPush":
+            case "unregisterPush":
+                replyOk(reply, id, json("queued", false, "configured", false));
+                return;
+            case "logout":
+                nativeLogout(reply, id);
+                return;
+            case "pickImage":
+                pickImage(reply, id);
+                return;
+            case "takePhoto":
+                takePhoto(reply, id);
+                return;
+            case "pickContact":
+                pickContact(reply, id);
+                return;
+            case "getLocation":
+                getLocation(reply, id);
+                return;
+            case "scanCode":
+                scanCode(payload.optString("mode", "qr"), reply, id);
+                return;
+            case "actionSheet":
+                actionSheet(payload, reply, id);
+                return;
+
             case "elmStatus":
                 replyOk(reply, id, elm.status());
                 return;
@@ -333,30 +384,55 @@ public final class MainActivity extends Activity {
 
     private void requestPermission(String permission, String id,
                                    JavaScriptReplyProxy reply) {
-        if (!"bluetooth".equalsIgnoreCase(permission)) {
-            replyError(reply, id, "UNSUPPORTED_PERMISSION",
-                    "Эта сборка запрашивает через bridge только Bluetooth.");
+        String alias = permission == null ? "" : permission.toLowerCase(Locale.ROOT);
+        String[] permissions = permissionsFor(alias);
+        if (permissions == null) {
+            replyError(reply, id, "UNSUPPORTED_PERMISSION", "Неизвестное разрешение: " + alias);
             return;
         }
-
-        if (Build.VERSION.SDK_INT < 31
-                || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
-                == PackageManager.PERMISSION_GRANTED) {
-            replyOk(reply, id, json("permission", "bluetooth", "granted", true));
+        boolean granted = true;
+        for (String item : permissions) {
+            if (checkSelfPermission(item) != PackageManager.PERMISSION_GRANTED) {
+                granted = false;
+                break;
+            }
+        }
+        if (permissions.length == 0 || granted) {
+            replyOk(reply, id, json("permission", alias, "granted", true, "prompted", false));
             return;
         }
-
-        if (pendingBluetooth != null) {
-            replyError(reply, id, "PERMISSION_BUSY",
-                    "Запрос Bluetooth-разрешения уже открыт.");
+        if (pendingPermission != null) {
+            replyError(reply, id, "PERMISSION_BUSY", "Системный запрос разрешения уже открыт.");
             return;
         }
+        pendingPermission = new PendingPermission(id, alias, reply);
+        requestPermissions(permissions, REQ_PERMISSION);
+    }
 
-        pendingBluetooth = new PendingPermission(id, reply);
-        requestPermissions(
-                new String[]{Manifest.permission.BLUETOOTH_CONNECT},
-                REQ_BLUETOOTH
-        );
+    private String[] permissionsFor(String alias) {
+        switch (alias) {
+            case "bluetooth":
+                if (Build.VERSION.SDK_INT < 31) return new String[0];
+                return new String[]{Manifest.permission.BLUETOOTH_CONNECT};
+            case "camera":
+                return new String[]{Manifest.permission.CAMERA};
+            case "microphone":
+                return new String[]{Manifest.permission.RECORD_AUDIO};
+            case "location":
+                return new String[]{
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                };
+            case "contacts":
+                return new String[]{Manifest.permission.READ_CONTACTS};
+            case "notifications":
+                if (Build.VERSION.SDK_INT < 33) return new String[0];
+                return new String[]{Manifest.permission.POST_NOTIFICATIONS};
+            case "images":
+                return new String[0];
+            default:
+                return null;
+        }
     }
 
     @Override
@@ -364,16 +440,232 @@ public final class MainActivity extends Activity {
                                            @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode != REQ_BLUETOOTH) return;
-
-        PendingPermission pending = pendingBluetooth;
-        pendingBluetooth = null;
+        if (requestCode != REQ_PERMISSION) return;
+        PendingPermission pending = pendingPermission;
+        pendingPermission = null;
         if (pending == null) return;
-
-        boolean granted = grantResults.length > 0
-                && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+        boolean granted = grantResults.length > 0;
+        for (int result : grantResults) {
+            if (result != PackageManager.PERMISSION_GRANTED) {
+                granted = false;
+                break;
+            }
+        }
         replyOk(pending.reply, pending.id,
-                json("permission", "bluetooth", "granted", granted));
+                json("permission", pending.alias, "granted", granted, "prompted", true));
+    }
+
+    private void nativeLogout(JavaScriptReplyProxy reply, String id) {
+        replyOk(reply, id, json("queued", true));
+        CookieManager.getInstance().removeAllCookies(value -> {
+            CookieManager.getInstance().flush();
+            WebStorage.getInstance().deleteAllData();
+            webView.clearHistory();
+            webView.clearCache(false);
+            webView.loadUrl(BASE_URL);
+        });
+    }
+
+    private boolean nativeBusy(JavaScriptReplyProxy reply, String id) {
+        if (pendingNativeReply == null) return false;
+        replyError(reply, id, "NATIVE_ACTION_BUSY", "Другое системное действие ещё не завершено.");
+        return true;
+    }
+
+    private void pickImage(JavaScriptReplyProxy reply, String id) {
+        if (nativeBusy(reply, id)) return;
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        pendingNativeReply = reply;
+        pendingNativeId = id;
+        try {
+            startActivityForResult(intent, REQ_IMAGE_PICK);
+        } catch (ActivityNotFoundException error) {
+            clearNativePending();
+            replyError(reply, id, "IMAGE_PICKER_UNAVAILABLE", message(error));
+        }
+    }
+
+    private void takePhoto(JavaScriptReplyProxy reply, String id) {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            replyError(reply, id, "CAMERA_PERMISSION_REQUIRED", "Сначала разрешите доступ к камере.");
+            return;
+        }
+        if (nativeBusy(reply, id)) return;
+        try {
+            File dir = new File(getCacheDir(), "camera");
+            if (!dir.exists() && !dir.mkdirs()) throw new IllegalStateException("CAMERA_CACHE_UNAVAILABLE");
+            File photo = File.createTempFile("kareta_", ".jpg", dir);
+            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".files", photo);
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, uri);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            pendingCameraUri = uri;
+            pendingNativeReply = reply;
+            pendingNativeId = id;
+            startActivityForResult(intent, REQ_CAMERA);
+        } catch (Throwable error) {
+            clearNativePending();
+            replyError(reply, id, "CAMERA_UNAVAILABLE", message(error));
+        }
+    }
+
+    private void pickContact(JavaScriptReplyProxy reply, String id) {
+        if (nativeBusy(reply, id)) return;
+        Intent intent = new Intent(Intent.ACTION_PICK,
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI);
+        pendingNativeReply = reply;
+        pendingNativeId = id;
+        try {
+            startActivityForResult(intent, REQ_CONTACT);
+        } catch (ActivityNotFoundException error) {
+            clearNativePending();
+            replyError(reply, id, "CONTACT_PICKER_UNAVAILABLE", message(error));
+        }
+    }
+
+    private void getLocation(JavaScriptReplyProxy reply, String id) {
+        boolean granted =
+                checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        if (!granted) {
+            replyError(reply, id, "LOCATION_PERMISSION_REQUIRED", "Сначала разрешите геолокацию.");
+            return;
+        }
+        LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        if (manager == null) {
+            replyError(reply, id, "LOCATION_UNAVAILABLE", "LocationManager недоступен.");
+            return;
+        }
+        try {
+            Location best = null;
+            for (String provider : manager.getProviders(true)) {
+                Location candidate = manager.getLastKnownLocation(provider);
+                if (candidate != null && (best == null || candidate.getTime() > best.getTime())) {
+                    best = candidate;
+                }
+            }
+            if (best != null && System.currentTimeMillis() - best.getTime() < 120000L) {
+                replyLocation(reply, id, best);
+                return;
+            }
+            requestSingleLocation(manager, reply, id);
+        } catch (Throwable error) {
+            replyError(reply, id, "LOCATION_UNAVAILABLE", message(error));
+        }
+    }
+
+    private void requestSingleLocation(LocationManager manager,
+                                       JavaScriptReplyProxy reply, String id) {
+        final boolean[] completed = {false};
+        final LocationListener[] holder = new LocationListener[1];
+        holder[0] = location -> {
+            if (completed[0]) return;
+            completed[0] = true;
+            try { manager.removeUpdates(holder[0]); } catch (Throwable ignored) {}
+            replyLocation(reply, id, location);
+        };
+        try {
+            String provider = manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                    ? LocationManager.GPS_PROVIDER : LocationManager.NETWORK_PROVIDER;
+            manager.requestSingleUpdate(provider, holder[0], Looper.getMainLooper());
+            handler.postDelayed(() -> {
+                if (completed[0]) return;
+                completed[0] = true;
+                try { manager.removeUpdates(holder[0]); } catch (Throwable ignored) {}
+                replyError(reply, id, "LOCATION_TIMEOUT", "Не удалось получить координаты.");
+            }, 12000L);
+        } catch (Throwable error) {
+            replyError(reply, id, "LOCATION_UNAVAILABLE", message(error));
+        }
+    }
+
+    private void replyLocation(JavaScriptReplyProxy reply, String id, Location location) {
+        JSONObject out = new JSONObject();
+        try {
+            out.put("lat", location.getLatitude());
+            out.put("lng", location.getLongitude());
+            out.put("accuracy", location.hasAccuracy() ? location.getAccuracy() : JSONObject.NULL);
+            out.put("time", location.getTime());
+        } catch (JSONException ignored) {}
+        replyOk(reply, id, out);
+    }
+
+    private void scanCode(String mode, JavaScriptReplyProxy reply, String id) {
+        try {
+            GmsBarcodeScannerOptions.Builder builder =
+                    new GmsBarcodeScannerOptions.Builder().enableAutoZoom();
+            if ("vin".equalsIgnoreCase(mode)) {
+                builder.setBarcodeFormats(
+                        Barcode.FORMAT_CODE_39,
+                        Barcode.FORMAT_CODE_128,
+                        Barcode.FORMAT_DATA_MATRIX,
+                        Barcode.FORMAT_QR_CODE
+                );
+            } else {
+                builder.setBarcodeFormats(
+                        Barcode.FORMAT_QR_CODE,
+                        Barcode.FORMAT_DATA_MATRIX,
+                        Barcode.FORMAT_AZTEC,
+                        Barcode.FORMAT_PDF417
+                );
+            }
+            GmsBarcodeScanner scanner = GmsBarcodeScanning.getClient(this, builder.build());
+            scanner.startScan()
+                    .addOnSuccessListener(barcode -> replyOk(reply, id,
+                            json("rawValue", barcode.getRawValue(),
+                                    "displayValue", barcode.getDisplayValue(),
+                                    "format", barcode.getFormat(),
+                                    "valueType", barcode.getValueType(),
+                                    "mode", mode)))
+                    .addOnCanceledListener(() ->
+                            replyError(reply, id, "CANCELLED", "Сканирование отменено."))
+                    .addOnFailureListener(error ->
+                            replyError(reply, id, "SCAN_FAILED", message(error)));
+        } catch (Throwable error) {
+            replyError(reply, id, "SCANNER_UNAVAILABLE", message(error));
+        }
+    }
+
+    private void actionSheet(JSONObject payload, JavaScriptReplyProxy reply, String id) {
+        JSONArray actions = payload.optJSONArray("actions");
+        if (actions == null || actions.length() == 0 || actions.length() > 10) {
+            replyError(reply, id, "INVALID_ACTIONS", "Некорректный список действий.");
+            return;
+        }
+        CharSequence[] labels = new CharSequence[actions.length()];
+        String[] ids = new String[actions.length()];
+        for (int i = 0; i < actions.length(); i++) {
+            JSONObject item = actions.optJSONObject(i);
+            if (item == null) {
+                replyError(reply, id, "INVALID_ACTIONS", "Некорректный элемент.");
+                return;
+            }
+            labels[i] = item.optString("title", "Действие " + (i + 1));
+            ids[i] = item.optString("id", String.valueOf(i));
+        }
+        final boolean[] answered = {false};
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(payload.optString("title", "Действия"))
+                .setItems(labels, (d, which) -> {
+                    answered[0] = true;
+                    replyOk(reply, id, json("action", ids[which], "index", which));
+                })
+                .create();
+        dialog.setOnCancelListener(d -> {
+            if (!answered[0]) {
+                answered[0] = true;
+                replyError(reply, id, "CANCELLED", "Действие отменено.");
+            }
+        });
+        dialog.show();
+    }
+
+    private void clearNativePending() {
+        pendingNativeReply = null;
+        pendingNativeId = "";
+        pendingCameraUri = null;
     }
 
     private Elm327Manager.Callback bridgeCallback(JavaScriptReplyProxy reply,
@@ -585,6 +877,61 @@ public final class MainActivity extends Activity {
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        JavaScriptReplyProxy reply = pendingNativeReply;
+        String id = pendingNativeId;
+
+        if (requestCode == REQ_IMAGE_PICK && reply != null) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                replyOk(reply, id, json("uri", data.getData().toString(), "source", "picker"));
+            } else {
+                replyError(reply, id, "CANCELLED", "Выбор изображения отменён.");
+            }
+            clearNativePending();
+            return;
+        }
+
+        if (requestCode == REQ_CAMERA && reply != null) {
+            Uri photo = pendingCameraUri;
+            if (resultCode == RESULT_OK && photo != null) {
+                replyOk(reply, id, json("uri", photo.toString(), "source", "camera"));
+            } else {
+                replyError(reply, id, "CANCELLED", "Съёмка отменена.");
+            }
+            clearNativePending();
+            return;
+        }
+
+        if (requestCode == REQ_CONTACT && reply != null) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                String name = "";
+                String phone = "";
+                try (Cursor cursor = getContentResolver().query(
+                        data.getData(),
+                        new String[]{
+                                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                                ContactsContract.CommonDataKinds.Phone.NUMBER
+                        },
+                        null, null, null)) {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        name = cursor.getString(0);
+                        phone = cursor.getString(1);
+                    }
+                } catch (Throwable error) {
+                    replyError(reply, id, "CONTACT_READ_FAILED", message(error));
+                    clearNativePending();
+                    return;
+                }
+                replyOk(reply, id, json("name", name, "phone", phone));
+            } else {
+                replyError(reply, id, "CANCELLED", "Выбор контакта отменён.");
+            }
+            clearNativePending();
+        }
+    }
+
+    @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         if (webView != null) webView.saveState(outState);
         super.onSaveInstanceState(outState);
@@ -609,10 +956,12 @@ public final class MainActivity extends Activity {
 
     private static final class PendingPermission {
         final String id;
+        final String alias;
         final JavaScriptReplyProxy reply;
 
-        PendingPermission(String id, JavaScriptReplyProxy reply) {
+        PendingPermission(String id, String alias, JavaScriptReplyProxy reply) {
             this.id = id;
+            this.alias = alias;
             this.reply = reply;
         }
     }
