@@ -353,7 +353,7 @@ final class Elm327Manager {
         if (upper.contains("BUS INIT") && upper.contains("ERROR")) throw new Exception("BUS INIT ERROR.");
         if (upper.contains("CAN ERROR")) throw new Exception("CAN ERROR.");
         if (upper.contains("STOPPED")) throw new Exception("ELM327 STOPPED.");
-        if (upper.matches("(?s).*\?\s*$")) throw new Exception("Команда не поддерживается: " + command);
+        if (upper.trim().endsWith("?")) throw new Exception("Команда не поддерживается: " + command);
         return raw;
     }
 
