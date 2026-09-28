@@ -30,8 +30,17 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
+      - name: Lint debug
+        shell: bash
+        run: |
+          set +e
+          gradle --no-daemon :app:lintDebug
+          STATUS=$?
+          REPORT="app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt"
+          if [ -f "$REPORT" ]; then cat "$REPORT"; fi
+          exit $STATUS
       - name: Build debug APK
-        run: gradle --no-daemon :app:lintDebug :app:assembleDebug
+        run: gradle --no-daemon :app:assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
