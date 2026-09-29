@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Contact permission minimization
+
+- Removes broad `READ_CONTACTS` access from the Android manifest.
+- Keeps Native API `pickContact` on the system `ACTION_PICK` phone-data picker, which delegates temporary access only to the selected row.
+- Keeps the legacy Native API permission alias `contacts` for compatibility, but it now resolves without a runtime permission prompt.
+- Adds a build-time `verifyContactPickerContract` regression check and runs it in pull-request CI.
+
+
 ## 1.4.3 — WebView media hardening
 
 - Declares the FileProvider required by native and WebView camera capture.
