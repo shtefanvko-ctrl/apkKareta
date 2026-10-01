@@ -41,6 +41,16 @@ jobs:
           exit $STATUS
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Lint release
+        run: gradle --no-daemon :app:lintRelease
+      - name: Build unsigned release AAB
+        run: gradle --no-daemon :app:bundleRelease
+      - name: Upload release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: KARETA-1.4.3-release-unsigned-aab
+          path: app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
