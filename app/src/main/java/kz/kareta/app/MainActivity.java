@@ -468,11 +468,10 @@ public final class MainActivity extends ComponentActivity {
                         Manifest.permission.ACCESS_COARSE_LOCATION
                 };
             case "contacts":
-                // Contact selection uses ACTION_PICK and does not require broad READ_CONTACTS access.
-                return new String[0];
+                return new String[]{Manifest.permission.READ_CONTACTS};
             case "notifications":
-                // Push is not configured in Native API 6 yet; do not request a permission we do not use.
-                return new String[0];
+                if (Build.VERSION.SDK_INT < 33) return new String[0];
+                return new String[]{Manifest.permission.POST_NOTIFICATIONS};
             case "images":
                 return new String[0];
             default:
