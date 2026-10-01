@@ -73,8 +73,8 @@ import java.util.Collections;
 import java.util.Locale;
 
 public final class MainActivity extends ComponentActivity {
-    private static final String BASE_URL = "https://s.kareta.kz/";
-    private static final String BASE_HOST = "s.kareta.kz";
+    private static final String BASE_URL = BuildConfig.WEB_ORIGIN;
+    private static final String BASE_HOST = Uri.parse(BASE_URL).getHost();
     private static final int NATIVE_API_VERSION = 6;
     private static final int REQ_PERMISSION = 4101;
     private static final int REQ_IMAGE_PICK = 4102;
