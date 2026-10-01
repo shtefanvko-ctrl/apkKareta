@@ -1,6 +1,13 @@
 name: Android Debug APK
 
 on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - ".github/workflows/android-debug.yml"
   push:
     branches:
       - main
@@ -9,6 +16,7 @@ on:
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle.properties"
+      - ".github/workflows/android-debug.yml"
   workflow_dispatch: {}
 
 permissions:
@@ -44,6 +52,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KARETA-1.4.3-debug
+          name: KARETA-${{ github.sha }}-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
