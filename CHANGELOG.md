@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.4 — OBD remote-job device identity
+
+- Adds a stable per-installation UUID stored in app-private preferences.
+- Exposes `installationId` through trusted-origin `appInfo()` without changing Native API 6 command compatibility.
+- Provides the device identity needed by the KARETA active-app OBD remote diagnostic control plane.
+- No Firebase/push receiver or background ELM execution is enabled in this increment.
+
+
 ## 1.4.3 — WebView media hardening
 
 - Declares the FileProvider required by native and WebView camera capture.
