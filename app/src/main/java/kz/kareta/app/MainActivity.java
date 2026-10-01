@@ -71,6 +71,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.UUID;
 
 public final class MainActivity extends ComponentActivity {
     private static final String BASE_URL = "https://s.kareta.kz/";
@@ -757,6 +758,18 @@ public final class MainActivity extends ComponentActivity {
         };
     }
 
+    private String installationId() {
+        final String prefsName = "kareta_installation";
+        final String key = "installation_id";
+        android.content.SharedPreferences prefs =
+                getSharedPreferences(prefsName, Context.MODE_PRIVATE);
+        String value = prefs.getString(key, "");
+        if (value != null && !value.isEmpty()) return value;
+        value = UUID.randomUUID().toString();
+        prefs.edit().putString(key, value).apply();
+        return value;
+    }
+
     private JSONObject appInfo() {
         JSONObject out = new JSONObject();
         try {
@@ -766,6 +779,7 @@ public final class MainActivity extends ComponentActivity {
             out.put("versionCode", Build.VERSION.SDK_INT >= 28
                     ? info.getLongVersionCode() : info.versionCode);
             out.put("nativeApiVersion", NATIVE_API_VERSION);
+            out.put("installationId", installationId());
             out.put("baseUrl", BASE_URL);
             out.put("androidSdk", Build.VERSION.SDK_INT);
             out.put("device", Build.MANUFACTURER + " " + Build.MODEL);
