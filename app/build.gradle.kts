@@ -6,7 +6,6 @@ android {
 
     defaultConfig {
         applicationId = "kz.kareta.app"
-        buildConfigField("String", "WEB_ORIGIN", "\"https://kareta.kz/\"")
         minSdk = 24
         targetSdk = 36
         versionCode = 9
@@ -14,17 +13,10 @@ android {
     }
 
     buildTypes {
-        debug {
-            buildConfigField("String", "WEB_ORIGIN", "\"https://s.kareta.kz/\"")
-        }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
-    }
-
-    buildFeatures {
-        buildConfig = true
     }
 
     compileOptions {
