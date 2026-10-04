@@ -73,8 +73,8 @@ import java.util.Collections;
 import java.util.Locale;
 
 public final class MainActivity extends ComponentActivity {
-    private static final String BASE_URL = "https://s.kareta.kz/";
-    private static final String BASE_HOST = "s.kareta.kz";
+    private static final String BASE_URL = "https://m.kareta.kz/";
+    private static final String BASE_HOST = "m.kareta.kz";
     private static final int NATIVE_API_VERSION = 6;
     private static final int REQ_PERMISSION = 4101;
     private static final int REQ_IMAGE_PICK = 4102;
@@ -105,7 +105,7 @@ public final class MainActivity extends ComponentActivity {
 
     private final Runnable pageTimeout = () -> {
         if (!pageLoaded && webView != null) {
-            showLoadError("Сервер s.kareta.kz не ответил за 30 секунд.");
+            showLoadError("Сервер m.kareta.kz не ответил за 30 секунд.");
         }
     };
 
@@ -181,7 +181,7 @@ public final class MainActivity extends ComponentActivity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.4.3");
+        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.4.4");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -217,7 +217,7 @@ public final class MainActivity extends ComponentActivity {
                                         WebResourceError error) {
                 if (request.isForMainFrame()) {
                     CharSequence description = error == null ? "" : error.getDescription();
-                    showLoadError("Не удалось загрузить s.kareta.kz: " + description);
+                    showLoadError("Не удалось загрузить m.kareta.kz: " + description);
                 }
             }
 
@@ -227,7 +227,7 @@ public final class MainActivity extends ComponentActivity {
                 if (request.isForMainFrame()
                         && errorResponse != null
                         && errorResponse.getStatusCode() >= 500) {
-                    showLoadError("s.kareta.kz вернул HTTP " + errorResponse.getStatusCode() + ".");
+                    showLoadError("m.kareta.kz вернул HTTP " + errorResponse.getStatusCode() + ".");
                 }
             }
 
@@ -257,7 +257,7 @@ public final class MainActivity extends ComponentActivity {
                 (view, message, sourceOrigin, isMainFrame, replyProxy) -> {
                     if (!isMainFrame || !isTrustedUri(sourceOrigin)) {
                         replyError(replyProxy, "", "ORIGIN_DENIED",
-                                "Native API доступен только s.kareta.kz.");
+                                "Native API доступен только m.kareta.kz.");
                         return;
                     }
                     handleNativeMessage(message, replyProxy);
