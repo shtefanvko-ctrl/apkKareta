@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.4 — Production origin
+
+- Switches the Android WebView start URL from `https://s.kareta.kz/` to `https://m.kareta.kz/`.
+- Moves the Native API 6 trusted-origin allowlist to `m.kareta.kz`, so camera, geolocation, scanner and ELM327 remain available after the production host switch.
+- Updates the Android user agent and application version to 1.4.4 (10).
+- Keeps staging `s.kareta.kz` outside the trusted native bridge.
+
 ## 1.4.3 — WebView media hardening
 
 - Declares the FileProvider required by native and WebView camera capture.
