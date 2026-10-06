@@ -8,6 +8,8 @@ Hosted diagnostics: `https://m.kareta.kz/#/diagnostics`
 
 Architecture: the UI is owned by `m.kareta.kz`; Android is the native WebView/hardware bridge for Bluetooth/ELM327, camera, scanner, notifications, location, contacts and other device capabilities.
 
+1.4.4 also exposes a stable per-installation `installationId` through trusted-origin `appInfo()` for the authenticated active-app OBD remote-job control plane. Native API remains version 6; no push receiver or background ELM execution is added.
+
 1.4.4 keeps Android system insets, async permissions, ELM327 Classic SPP transport/state handling, connect timeouts and durable offline synchronization. Native duplicate ELM327 UI has been removed from the offline screen.
 
 Generated build output, `.gradle`, `build/`, APKs, local.properties, signing material and nested release ZIPs do not belong in Git.

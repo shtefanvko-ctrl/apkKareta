@@ -1,7 +1,10 @@
 # Changelog
 
-## 1.4.4 — Production origin
+## 1.4.4 — Production origin + OBD installation identity
 
+- Adds a stable per-installation UUID stored in app-private preferences.
+- Exposes `installationId` through trusted-origin `appInfo()` without changing Native API 6 command compatibility.
+- Provides the device identity needed by the active-app OBD remote diagnostic control plane.
 - Switches the Android WebView start URL from `https://s.kareta.kz/` to `https://m.kareta.kz/`.
 - Moves the Native API 6 trusted-origin allowlist to `m.kareta.kz`, so camera, geolocation, scanner and ELM327 remain available after the production host switch.
 - Updates the Android user agent and application version to 1.4.4 (10).
