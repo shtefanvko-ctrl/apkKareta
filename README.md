@@ -2,22 +2,22 @@
 
 Current shell: 1.4.4 (10)
 Application ID: `kz.kareta.app`
-Web origin: `https://s.kareta.kz/`
+Web origin: `https://m.kareta.kz/`
 Native API: 6
-Hosted diagnostics: `https://s.kareta.kz/#/diagnostics`
+Hosted diagnostics: `https://m.kareta.kz/#/diagnostics`
 
-Architecture: the UI is owned by `s.kareta.kz`; Android is the native WebView/hardware bridge for Bluetooth/ELM327, camera, scanner, notifications, location, contacts and other device capabilities.
+Architecture: the UI is owned by `m.kareta.kz`; Android is the native WebView/hardware bridge for Bluetooth/ELM327, camera, scanner, notifications, location, contacts and other device capabilities.
 
-1.4.4 keeps Native API 6 backward-compatible and adds a stable per-installation identifier exposed only through the trusted s.kareta.kz WebView bridge. This is used by the server-side OBD remote-job control plane to address a concrete APK installation without exposing raw ELM commands.
+1.4.4 also exposes a stable per-installation `installationId` through trusted-origin `appInfo()` for the authenticated active-app OBD remote-job control plane. Native API remains version 6; no push receiver or background ELM execution is added.
 
-1.4.3 hardens Android system insets, async permissions, ELM327 Classic SPP transport/state handling, connect timeouts and durable offline synchronization. Native duplicate ELM327 UI has been removed from the offline screen.
+1.4.4 keeps Android system insets, async permissions, ELM327 Classic SPP transport/state handling, connect timeouts and durable offline synchronization. Native duplicate ELM327 UI has been removed from the offline screen.
 
 Generated build output, `.gradle`, `build/`, APKs, local.properties, signing material and nested release ZIPs do not belong in Git.
 
 See `CHANGELOG.md` and `docs/V1_4_2_ANDROID_BRIDGE_HARDENING.md`.
 
 
-### 1.4.3 verification
+### 1.4.4 verification
 
 GitHub Actions requires both `lintDebug` and `assembleDebug` before publishing the debug APK.
 WebView file inputs, native camera capture, trusted-origin camera/microphone permissions,
