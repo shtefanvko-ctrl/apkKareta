@@ -1,0 +1,54 @@
+name: DEVIL Android developer mode
+
+on:
+  pull_request:
+    paths:
+      - "ai/DEVIL.md"
+      - ".github/prompts/devil.prompt.md"
+      - ".cursor/commands/devil.md"
+      - "tools/test_devil_android_mode.py"
+      - "tools/verify_native_api6_contract.py"
+      - "tools/verify_elm327_contract.py"
+      - "README.md"
+      - "app/src/main/AndroidManifest.xml"
+      - "app/src/main/java/kz/kareta/app/MainActivity.java"
+      - "app/src/main/java/kz/kareta/app/Elm327Manager.java"
+      - "app/src/main/java/kz/kareta/app/OfflineQueue.java"
+      - ".github/workflows/devil-android-mode.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Prove exact checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_SHA"
+          echo "EXACT_HEAD: $actual"
+
+      - name: DEVIL adapter syntax
+        run: python3 -m py_compile tools/test_devil_android_mode.py
+
+      - name: DEVIL Android contract
+        run: python3 tools/test_devil_android_mode.py
+
+      - name: Native API 6 source contract
+        run: python3 tools/verify_native_api6_contract.py
+
+      - name: ELM327 source contract
+        run: python3 tools/verify_elm327_contract.py
