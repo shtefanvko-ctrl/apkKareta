@@ -8,6 +8,7 @@ on:
       - "app/src/main/AndroidManifest.xml"
       - "README.md"
       - "tools/verify_native_api6_contract.py"
+      - "tools/verify_elm327_contract.py"
       - ".github/workflows/native-api6-contract.yml"
   workflow_dispatch: {}
 
@@ -37,3 +38,6 @@ jobs:
 
       - name: Native API 6 source contract
         run: python3 tools/verify_native_api6_contract.py
+
+      - name: ELM327 source contract
+        run: python3 tools/verify_elm327_contract.py
