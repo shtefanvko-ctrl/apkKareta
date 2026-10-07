@@ -74,9 +74,17 @@ jobs:
           exit $STATUS
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Hash debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app/build/outputs/apk/debug
+          sha256sum app-debug.apk | tee app-debug.apk.sha256
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: KARETA-${{ github.event.pull_request.head.sha || github.sha }}-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/app-debug.apk.sha256
           if-no-files-found: error
