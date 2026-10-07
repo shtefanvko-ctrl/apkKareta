@@ -70,6 +70,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KARETA-${{ github.sha }}-debug
+          name: KARETA-${{ github.event.pull_request.head.sha || github.sha }}-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
