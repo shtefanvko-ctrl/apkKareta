@@ -9,3 +9,6 @@ local.properties
 .idea/
 .DS_Store
 *.zip
+
+# Local physical-device evidence may contain VIN, geo and Bluetooth identifiers.
+artifacts/device-smoke/
