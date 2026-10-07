@@ -9,6 +9,8 @@ on:
       - "README.md"
       - "tools/verify_native_api6_contract.py"
       - "tools/verify_elm327_contract.py"
+      - "tools/device_smoke_adb.sh"
+      - "docs/DEVICE_ACCEPTANCE.md"
       - ".github/workflows/native-api6-contract.yml"
   workflow_dispatch: {}
 
@@ -41,3 +43,6 @@ jobs:
 
       - name: ELM327 source contract
         run: python3 tools/verify_elm327_contract.py
+
+      - name: ADB smoke harness syntax
+        run: bash -n tools/device_smoke_adb.sh
