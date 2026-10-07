@@ -1,0 +1,39 @@
+name: Native API 6 contract
+
+on:
+  pull_request:
+    paths:
+      - "app/src/main/java/kz/kareta/app/MainActivity.java"
+      - "app/src/main/java/kz/kareta/app/OfflineQueue.java"
+      - "app/src/main/AndroidManifest.xml"
+      - "README.md"
+      - "tools/verify_native_api6_contract.py"
+      - ".github/workflows/native-api6-contract.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Prove exact checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_SHA"
+          echo "EXACT_HEAD: $actual"
+
+      - name: Native API 6 source contract
+        run: python3 tools/verify_native_api6_contract.py
