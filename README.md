@@ -1,7 +1,8 @@
 # KARETA.KZ — Android shell
 
-Current shell: 1.4.3 (9)
-Application ID: `kz.kareta.app`
+Staging shell candidate: 1.5.0-staging (10)
+Staging Application ID: `kz.kareta.app.staging` (installs alongside production)
+Previous shell: 1.4.3 (9)
 Web origin: `https://s.kareta.kz/`
 Native API: 6
 Hosted diagnostics: `https://s.kareta.kz/#/diagnostics`
@@ -21,3 +22,14 @@ GitHub Actions requires both `lintDebug` and `assembleDebug` before publishing t
 WebView file inputs, native camera capture, trusted-origin camera/microphone permissions,
 geolocation prompts, predictive back navigation, renderer recovery, ELM327 and the
 durable offline queue are included in the verified shell.
+
+### 1.5.0 staging isolation
+
+- Debug APK label: **KARETA STAGING**. Its package is isolated from the production app and uses independent app storage/cookies.
+- Main WebView, native navigation and message listener trust **https://s.kareta.kz/** only.
+- In-WebView requests to other KARETA first-party hosts are blocked rather than silently redirected to production; first-party navigation and native `openExternal` calls cannot open those hosts.
+- External map handlers and Android/Google platform services remain external; the Android shell does not rewrite third-party traffic.
+- The remote SPA must itself use relative staging API URLs; WebView interception alone does not certify all service-worker, WebSocket or backend-to-backend traffic. Validate those against the live staging deployment.
+- CI gates: staging-source isolation, lintDebug and assembleDebug. Device-only acceptance (camera, QR, geolocation, Bluetooth ELM327 and offline replay) remains separate until exercised on a physical Android device.
+
+Install the CI-generated debug APK on a test handset. It must open **s.kareta.kz** over HTTPS, with no production fallback. Do not publish a production release from this branch.
