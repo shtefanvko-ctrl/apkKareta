@@ -12,6 +12,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.content.res.ColorStateList;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -28,6 +29,8 @@ import android.os.Vibrator;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
@@ -44,6 +47,10 @@ import android.webkit.WebView;
 import android.webkit.WebStorage;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
@@ -91,6 +98,7 @@ public final class MainActivity extends ComponentActivity {
 
     private WebView webView;
     private FrameLayout root;
+    private FrameLayout loadingOverlay;
     private Elm327Manager elm;
     private OfflineQueue offlineQueue;
     private boolean pageLoaded;
@@ -131,12 +139,12 @@ public final class MainActivity extends ComponentActivity {
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         root = new FrameLayout(this);
-        root.setBackgroundColor(Color.rgb(16, 18, 22));
+        root.setBackgroundColor(Color.WHITE);
         setContentView(root);
 
         WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), root);
-        bars.setAppearanceLightStatusBars(false);
-        bars.setAppearanceLightNavigationBars(false);
+        bars.setAppearanceLightStatusBars(true);
+        bars.setAppearanceLightNavigationBars(true);
 
         ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
             Insets safe = insets.getInsets(
@@ -153,19 +161,21 @@ public final class MainActivity extends ComponentActivity {
         offlineQueue = new OfflineQueue(this);
 
         configureWebView();
+        installLoadingOverlay();
         installNativeBridge();
 
+        boolean restored = false;
         if (savedInstanceState != null) {
-            webView.restoreState(savedInstanceState);
-        } else {
-            webView.loadUrl(BASE_URL);
+            android.webkit.WebBackForwardList history = webView.restoreState(savedInstanceState);
+            restored = history != null && history.getSize() > 0;
         }
+        if (!restored) webView.loadUrl(BASE_URL);
     }
 
     @SuppressLint("SetJavaScriptEnabled") // SPA requires JS; Native API is restricted to the trusted HTTPS origin.
     private void configureWebView() {
         webView = new WebView(this);
-        webView.setBackgroundColor(Color.rgb(16, 18, 22));
+        webView.setBackgroundColor(Color.WHITE);
         root.addView(webView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -183,7 +193,7 @@ public final class MainActivity extends ComponentActivity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.5.0-staging");
+        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.5.1-staging");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -221,6 +231,7 @@ public final class MainActivity extends ComponentActivity {
             @Override
             public void onPageStarted(WebView view, String url,
                                       android.graphics.Bitmap favicon) {
+                showLoadingOverlay();
                 pageLoaded = false;
                 handler.removeCallbacks(pageTimeout);
                 handler.postDelayed(pageTimeout, PAGE_TIMEOUT_MS);
@@ -230,6 +241,10 @@ public final class MainActivity extends ComponentActivity {
             public void onPageFinished(WebView view, String url) {
                 pageLoaded = true;
                 handler.removeCallbacks(pageTimeout);
+                // Visual-state callback keeps the splash visible until WebView paints.
+                view.postVisualStateCallback(0, requestId -> {
+                    if (webView == view) hideLoadingOverlay();
+                });
             }
 
             @Override
@@ -261,6 +276,57 @@ public final class MainActivity extends ComponentActivity {
                 return true;
             }
         });
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void installLoadingOverlay() {
+        loadingOverlay = new FrameLayout(this);
+        loadingOverlay.setBackgroundColor(Color.WHITE);
+
+        LinearLayout column = new LinearLayout(this);
+        column.setGravity(Gravity.CENTER);
+        column.setOrientation(LinearLayout.VERTICAL);
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.kareta_mark_vector);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        logo.setContentDescription("Логотип KARETA");
+        column.addView(logo, new LinearLayout.LayoutParams(dp(112), dp(112)));
+
+        TextView label = new TextView(this);
+        label.setText("KARETA STAGING");
+        label.setTextColor(Color.rgb(35, 35, 35));
+        label.setTextSize(15);
+        label.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        labelParams.topMargin = dp(10);
+        column.addView(label, labelParams);
+
+        ProgressBar progress = new ProgressBar(this);
+        progress.setIndeterminate(true);
+        progress.setIndeterminateTintList(ColorStateList.valueOf(Color.rgb(255, 106, 0)));
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(dp(32), dp(32));
+        progressParams.topMargin = dp(26);
+        column.addView(progress, progressParams);
+
+        FrameLayout.LayoutParams centered = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER);
+        loadingOverlay.addView(column, centered);
+        root.addView(loadingOverlay, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    private void showLoadingOverlay() {
+        if (loadingOverlay != null) loadingOverlay.setVisibility(View.VISIBLE);
+    }
+
+    private void hideLoadingOverlay() {
+        if (loadingOverlay != null) loadingOverlay.setVisibility(View.GONE);
     }
 
     @SuppressLint("RequiresFeature") // Guarded by WebViewFeature.isFeatureSupported below.
