@@ -20,7 +20,7 @@ foreach ($executable in @($aapt, $signer, $keytool)) {
 
 $badging = (& $aapt dump badging $InputApk 2>&1) -join "`n"
 if ($LASTEXITCODE -ne 0) { throw 'Cannot read Android package metadata.' }
-if ($badging -notmatch "package: name='kz\.kareta\.app\.staging' versionCode='12' versionName='1\.5\.2-staging'") {
+if ($badging -notmatch "package: name='kz\.kareta\.app\.staging' versionCode='13' versionName='1\.5\.3-staging'") {
     throw 'Refusing to sign APK: unexpected application ID/version.'
 }
 $keyDir = Join-Path $env:LOCALAPPDATA 'Kareta\Signing'
