@@ -6,6 +6,9 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothSocket;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -17,6 +20,9 @@ import org.json.JSONObject;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,6 +55,9 @@ final class Elm327Manager {
     private static final String PREFS = "kareta_elm327";
     private static final String LAST_ADDRESS = "last_address";
     private static final String LAST_NAME = "last_name";
+    private static final String LAST_TRANSPORT = "last_transport";
+    private static final String LAST_WIFI_HOST = "last_wifi_host";
+    private static final String LAST_WIFI_PORT = "last_wifi_port";
 
     private final Context context;
     private final BluetoothAdapter adapter;
@@ -62,8 +71,11 @@ final class Elm327Manager {
     private volatile String deviceAddress = "";
     private volatile String deviceName = "";
     private volatile String protocol = "";
+    private volatile String transport = "classic_spp";
 
     private BluetoothSocket socket;
+    private Socket wifiSocket;
+    private BleElmSerial bleSerial;
     private InputStream input;
     private OutputStream output;
 
@@ -83,17 +95,18 @@ final class Elm327Manager {
             enabled = adapter != null && adapter.isEnabled();
         } catch (SecurityException ignored) {}
         try {
-            out.put("transport", "classic_spp");
+            out.put("transport", transport);
+            out.put("supportedTransports", new JSONArray().put("classic_spp").put("ble_gatt").put("wifi_tcp"));
             out.put("permission", permission);
             out.put("enabled", enabled);
             out.put("state", state.name());
-            out.put("connected", isSocketConnected());
-            out.put("ready", state == State.READY && isSocketConnected());
+            out.put("connected", isTransportConnected());
+            out.put("ready", state == State.READY && isTransportConnected());
             out.put("name", deviceName);
             out.put("address", deviceAddress);
             out.put("protocol", protocol);
             out.put("lastError", lastError);
-            out.put("pairedOnly", true);
+            out.put("pairedOnly", false);
         } catch (JSONException ignored) {}
         return out;
     }
@@ -110,6 +123,7 @@ final class Elm327Manager {
                 String address = device.getAddress();
                 row.put("name", name);
                 row.put("address", address);
+                row.put("transport", "classic_spp");
                 String probe = name.toLowerCase(Locale.ROOT);
                 row.put("likelyElm",
                         probe.contains("elm") || probe.contains("obd") || probe.contains("vlink"));
@@ -141,12 +155,172 @@ final class Elm327Manager {
     }
 
     void reconnectLast(Callback callback) {
+        String kind = prefs.getString(LAST_TRANSPORT, "classic_spp");
+        if ("wifi_tcp".equals(kind)) {
+            connectWifi(prefs.getString(LAST_WIFI_HOST, ""),
+                    prefs.getInt(LAST_WIFI_PORT, 35000), callback);
+            return;
+        }
         String address = prefs.getString(LAST_ADDRESS, "");
         if (address == null || address.isEmpty()) {
             callback.error("ELM_NO_LAST_DEVICE", "Нет сохранённого ELM327.");
             return;
         }
-        connect(address, callback);
+        if ("ble_gatt".equals(kind)) connectBle(address, callback);
+        else connect(address, callback);
+    }
+
+    @SuppressLint("MissingPermission") // Runtime Bluetooth permissions are enforced before scan.
+    void scanBle(Callback callback) {
+        io.execute(() -> {
+            BluetoothLeScanner scanner = null;
+            ScanCallback scan = null;
+            try {
+                requireBluetooth();
+                boolean permission = Build.VERSION.SDK_INT >= 31
+                        ? context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+                        : context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                if (!permission) throw new SecurityException("BLUETOOTH_SCAN_PERMISSION_REQUIRED");
+                scanner = adapter.getBluetoothLeScanner();
+                if (scanner == null) throw new Exception("BLE_SCANNER_UNAVAILABLE");
+                final java.util.Map<String, JSONObject> found = new java.util.concurrent.ConcurrentHashMap<>();
+                scan = new ScanCallback() {
+                    @Override public void onScanResult(int callbackType, ScanResult result) {
+                        BluetoothDevice device = result.getDevice();
+                        if (device == null) return;
+                        String address;
+                        try { address = device.getAddress(); }
+                        catch (SecurityException denied) { return; }
+                        String name = safeName(device);
+                        if ("Bluetooth".equals(name) && result.getScanRecord() != null
+                                && result.getScanRecord().getDeviceName() != null) {
+                            name = result.getScanRecord().getDeviceName();
+                        }
+                        try {
+                            JSONObject row = new JSONObject();
+                            row.put("name", name);
+                            row.put("address", address);
+                            row.put("transport", "ble_gatt");
+                            row.put("rssi", result.getRssi());
+                            String probe = name.toLowerCase(Locale.ROOT);
+                            row.put("likelyElm", probe.contains("obd") || probe.contains("elm")
+                                    || probe.contains("vlink") || probe.contains("vgate")
+                                    || probe.contains("veepeak") || probe.contains("carista"));
+                            found.put(address, row);
+                        } catch (JSONException ignored) {}
+                    }
+                    @Override public void onScanFailed(int errorCode) {
+                        // Return empty matches rather than inventing an adapter.
+                    }
+                };
+                scanner.startScan(scan);
+                Thread.sleep(6500);
+                List<JSONObject> matches = new ArrayList<>(found.values());
+                Collections.sort(matches, (a, b) -> {
+                    int byName = Boolean.compare(b.optBoolean("likelyElm"), a.optBoolean("likelyElm"));
+                    return byName != 0 ? byName : Integer.compare(b.optInt("rssi"), a.optInt("rssi"));
+                });
+                JSONArray rows = new JSONArray();
+                for (JSONObject row : matches) rows.put(row);
+                JSONObject out = new JSONObject();
+                out.put("devices", rows);
+                out.put("transport", "ble_gatt");
+                out.put("scanComplete", true);
+                callback.ok(out);
+            } catch (Throwable error) {
+                if (error instanceof InterruptedException) Thread.currentThread().interrupt();
+                callback.error("ELM_BLE_SCAN_FAILED", message(error));
+            } finally {
+                if (scanner != null && scan != null) {
+                    try { scanner.stopScan(scan); } catch (Exception ignored) {}
+                }
+            }
+        });
+    }
+
+    void connectBle(String address, Callback callback) {
+        io.execute(() -> {
+            state = State.CONNECTING;
+            lastError = "";
+            try {
+                requireBluetooth();
+                if (!BluetoothAdapter.checkBluetoothAddress(address))
+                    throw new IllegalArgumentException("Некорректный BLE MAC.");
+                closeSocket(false);
+                BleElmSerial candidate = new BleElmSerial(context, adapter);
+                candidate.connect(address);
+                synchronized (socketLock) {
+                    bleSerial = candidate;
+                    input = candidate.input();
+                    output = candidate.output();
+                }
+                transport = "ble_gatt";
+                deviceAddress = address;
+                deviceName = "BLE ELM327";
+                protocol = "";
+                state = State.ADAPTER_CONNECTED;
+                saveLastDevice();
+                callback.ok(status());
+            } catch (Throwable error) {
+                fail("ELM_BLE_CONNECT_FAILED", message(error));
+                callback.error("ELM_BLE_CONNECT_FAILED", message(error));
+            }
+        });
+    }
+
+    void connectWifi(String host, int port, Callback callback) {
+        io.execute(() -> {
+            state = State.CONNECTING;
+            lastError = "";
+            try {
+                connectWifiBlocking(host, port);
+                callback.ok(status());
+            } catch (Throwable error) {
+                fail("ELM_WIFI_CONNECT_FAILED", message(error));
+                callback.error("ELM_WIFI_CONNECT_FAILED", message(error));
+            }
+        });
+    }
+
+    private void connectWifiBlocking(String requestedHost, int port) throws Exception {
+        String host = requestedHost == null ? "" : requestedHost.trim();
+        if (!host.matches("[0-9.]{7,15}") || port < 1 || port > 65535) {
+            throw new IllegalArgumentException("Нужен локальный IPv4 и TCP-порт ELM327.");
+        }
+        InetAddress address = InetAddress.getByName(host);
+        if (!(address instanceof java.net.Inet4Address) || !address.isSiteLocalAddress()) {
+            throw new IllegalArgumentException("Разрешены только приватные IPv4 адреса Wi-Fi адаптеров.");
+        }
+        closeSocket(false);
+        Socket candidate = new Socket();
+        try {
+            candidate.connect(new InetSocketAddress(address, port), 7000);
+            candidate.setSoTimeout(8000);
+            candidate.setTcpNoDelay(true);
+            synchronized (socketLock) {
+                wifiSocket = candidate;
+                input = candidate.getInputStream();
+                output = candidate.getOutputStream();
+            }
+        } catch (Exception error) {
+            try { candidate.close(); } catch (Exception ignored) {}
+            throw error;
+        }
+        transport = "wifi_tcp";
+        deviceAddress = host + ":" + port;
+        deviceName = "Wi-Fi ELM327";
+        protocol = "";
+        state = State.ADAPTER_CONNECTED;
+        prefs.edit().putString(LAST_WIFI_HOST, host).putInt(LAST_WIFI_PORT, port).apply();
+        saveLastDevice();
+    }
+
+    private void saveLastDevice() {
+        prefs.edit()
+                .putString(LAST_TRANSPORT, transport)
+                .putString(LAST_ADDRESS, deviceAddress)
+                .putString(LAST_NAME, deviceName)
+                .apply();
     }
 
     void initialize(Callback callback) {
@@ -181,7 +355,7 @@ final class Elm327Manager {
                 callback.ok(out);
             } catch (Throwable error) {
                 lastError = message(error);
-                if (isSocketConnected()) state = State.ADAPTER_CONNECTED;
+                if (isTransportConnected()) state = State.ADAPTER_CONNECTED;
                 else state = State.ERROR;
                 callback.error("ELM_INIT_FAILED", message(error));
             }
@@ -252,6 +426,7 @@ final class Elm327Manager {
         out.put("protocol", protocol);
         out.put("adapterName", deviceName);
         out.put("adapterAddress", deviceAddress);
+        out.put("transport", transport);
 
         if (full) {
             String dtcRaw = commandDirect("03", 4500);
@@ -302,27 +477,23 @@ final class Elm327Manager {
             input = candidate.getInputStream();
             output = candidate.getOutputStream();
         }
+        transport = "classic_spp";
         deviceAddress = address;
         deviceName = safeName(device);
         protocol = "";
         state = State.ADAPTER_CONNECTED;
         lastError = "";
-        prefs.edit()
-                .putString(LAST_ADDRESS, deviceAddress)
-                .putString(LAST_NAME, deviceName)
-                .apply();
+        saveLastDevice();
     }
 
     private String commandDirect(String command, int timeoutMs) throws Exception {
-        BluetoothSocket active;
         InputStream in;
         OutputStream out;
         synchronized (socketLock) {
-            active = socket;
             in = input;
             out = output;
         }
-        if (active == null || !active.isConnected() || in == null || out == null) {
+        if (!isTransportConnected() || in == null || out == null) {
             throw new Exception("ELM327 не подключён.");
         }
 
@@ -498,8 +669,8 @@ final class Elm327Manager {
     }
 
     private void requireConnected() throws Exception {
-        requireBluetooth();
-        if (!isSocketConnected()) throw new Exception("ELM327 не подключён.");
+        if (!"wifi_tcp".equals(transport)) requireBluetooth();
+        if (!isTransportConnected()) throw new Exception("ELM327 не подключён.");
     }
 
     private void requireReady() throws Exception {
@@ -515,13 +686,13 @@ final class Elm327Manager {
                         == PackageManager.PERMISSION_GRANTED;
     }
 
-    private boolean isSocketConnected() {
+    private boolean isTransportConnected() {
         synchronized (socketLock) {
             try {
-                return socket != null && socket.isConnected();
-            } catch (Exception ignored) {
-                return false;
-            }
+                return (socket != null && socket.isConnected())
+                        || (wifiSocket != null && wifiSocket.isConnected() && !wifiSocket.isClosed())
+                        || (bleSerial != null && bleSerial.isConnected());
+            } catch (Exception ignored) { return false; }
         }
     }
 
@@ -547,9 +718,13 @@ final class Elm327Manager {
             try { if (input != null) input.close(); } catch (Exception ignored) {}
             try { if (output != null) output.close(); } catch (Exception ignored) {}
             try { if (socket != null) socket.close(); } catch (Exception ignored) {}
+            try { if (wifiSocket != null) wifiSocket.close(); } catch (Exception ignored) {}
+            try { if (bleSerial != null) bleSerial.close(); } catch (Exception ignored) {}
             input = null;
             output = null;
             socket = null;
+            wifiSocket = null;
+            bleSerial = null;
         }
         protocol = "";
         if (disconnectedState) {
