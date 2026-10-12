@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.2-staging (12) — display name and durable signing
+
+- Application name changed to **Kareta.kz - Автосервисы!**, preserving the existing KARETA icon and staging package ID.
+- New staging-only, locally persisted signing key ensures that future staging builds can update in place once installed.
+- CI remains lint/build only and its ephemeral debug-signed artifact must not be distributed to users.
+- One-time uninstall of former GitHub debug-signed KARETA STAGING is unavoidable because Android forbids certificate changes across in-place upgrades.
+- Signing identity is stored on KOMPUTER outside the repository with a DPAPI-encrypted password.
+
 ## 1.5.1-staging (11) — Android startup and location hotfix
 
 - Removes the dark startup root, makes Android system splash and WebView paint white, and scales the splash mark consistently.
