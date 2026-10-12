@@ -54,3 +54,13 @@ Install the CI-generated debug APK on a test handset. It must open **s.kareta.kz
 - IMPORTANT: prior GitHub-hosted CI APKs have a different debug certificate. They cannot be updated in place to this permanently signed version. Once, uninstall ONLY the previous `KARETA STAGING` package and install 1.5.2. Future permanently signed updates can install on top without uninstalling.
 - Back up the signing identity securely. The DPAPI password file is tied to the original Windows profile; migrating machines requires a planned secure export/restore, not copying the key alone.
 - Physical Android smoke tests are not replaced by lint/assemble CI checks.
+
+### Universal ELM transports (staging 1.5.3)
+
+- `classic_spp`: Android Bluetooth paired device selection. Attempts secure RFCOMM, then an insecure RFCOMM fallback if the paired adapter requires it.
+- `ble_gatt`: Android BLE scan with runtime permissions. Supported profiles include Nordic UART (NUS), HM-10 FFE0/FFE1, FFF0 and Vgate UART. Unsupported or proprietary BLE services receive explicit errors rather than false READY states.
+- `wifi_tcp`: Connect to a **private IPv4** address and port using the phone's Wi-Fi connection; configure the adapter network on the phone first.
+- `elmStatus`, `elmInit`, `elmCommand`, `elmSnapshot`, `elmLiveSnapshot` and the existing read-only OBD command allowlist are the common upper layer. Native API version remains 6.
+- USB OTG serial (CH340, CP210x, FTDI and CDC ACM) requires a separately tested Android USB Host implementation and is not part of this candidate.
+- Compile/lint alone does not prove any Bluetooth or vehicle handshake. Validate each physical adapter and vehicle with logs and ignition safely switched on.
+- Do not distribute the ephemeral CI-signed APK as the upgrade: re-sign on KOMPUTER with the same permanent staging certificate used for versionCode 12. This is needed for Android update-in-place.
