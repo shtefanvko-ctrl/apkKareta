@@ -1,6 +1,6 @@
 # KARETA.KZ — Android shell
 
-Staging shell candidate: 1.5.1-staging (11)
+Staging shell candidate: 1.5.2-staging (12)
 Staging Application ID: `kz.kareta.app.staging` (installs alongside production)
 Previous shell: 1.4.3 (9)
 Web origin: `https://s.kareta.kz/`
@@ -43,3 +43,14 @@ Install the CI-generated debug APK on a test handset. It must open **s.kareta.kz
 - Location now prioritizes fast network location over slow GPS for nearby discovery (GPS remains a fallback), accepts reasonably accurate recent positions and times out after eight seconds.
 - Backend OTP provider configuration is owned by the staging PHP deployment, not the APK. The application must not bypass identity security if SMS is absent.
 - On GitHub-hosted CI, the Android debug keystore may differ between builds: if the existing staging app cannot be upgraded, uninstall **only KARETA STAGING** before installing the new debug APK. This clears local staging cookies.
+
+### 1.5.2 staging identity and stable signing
+
+- Android launcher name is EXACTLY `Kareta.kz - Автосервисы!` (Android manifest label). The staging package ID remains `kz.kareta.app.staging` so it can coexist with production.
+- GitHub Actions builds are for compilation/lint evidence **only**: their runner-specific debug certificate MUST NOT be used for end-user installation or in-place updates.
+- The user-installable APK is re-signed with the **permanent local staging key** on KOMPUTER using `scripts/sign-staging-apk.ps1` and the existing Android SDK build tools. The signer validates versionCode/applicationId and verifies v2/v3 signatures after signing.
+- The PKCS12 key and DPAPI-encrypted password are held outside the repository in `%LOCALAPPDATA%\Kareta\Signing`. NEVER commit either file, share the private key, or put it in downloadable ZIPs.
+- To produce the next version, increment versionCode, update the script's expected version metadata, compile via CI, download the build input, and sign it on KOMPUTER with **the existing key**. Do not regenerate keys after the first run.
+- IMPORTANT: prior GitHub-hosted CI APKs have a different debug certificate. They cannot be updated in place to this permanently signed version. Once, uninstall ONLY the previous `KARETA STAGING` package and install 1.5.2. Future permanently signed updates can install on top without uninstalling.
+- Back up the signing identity securely. The DPAPI password file is tied to the original Windows profile; migrating machines requires a planned secure export/restore, not copying the key alone.
+- Physical Android smoke tests are not replaced by lint/assemble CI checks.
