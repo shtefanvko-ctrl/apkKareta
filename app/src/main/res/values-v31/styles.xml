@@ -2,6 +2,6 @@
 <resources>
     <style name="Theme.Kareta.Splash" parent="Theme.Kareta">
         <item name="android:windowSplashScreenBackground">@color/kareta_splash_bg</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/kareta_mark_vector</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
     </style>
 </resources>

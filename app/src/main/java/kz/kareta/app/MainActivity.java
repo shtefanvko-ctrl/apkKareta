@@ -12,6 +12,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.content.res.ColorStateList;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -28,6 +29,8 @@ import android.os.Vibrator;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
@@ -44,6 +47,10 @@ import android.webkit.WebView;
 import android.webkit.WebStorage;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
@@ -68,7 +75,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Locale;
 
@@ -89,6 +98,7 @@ public final class MainActivity extends ComponentActivity {
 
     private WebView webView;
     private FrameLayout root;
+    private FrameLayout loadingOverlay;
     private Elm327Manager elm;
     private OfflineQueue offlineQueue;
     private boolean pageLoaded;
@@ -129,12 +139,12 @@ public final class MainActivity extends ComponentActivity {
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         root = new FrameLayout(this);
-        root.setBackgroundColor(Color.rgb(16, 18, 22));
+        root.setBackgroundColor(Color.WHITE);
         setContentView(root);
 
         WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), root);
-        bars.setAppearanceLightStatusBars(false);
-        bars.setAppearanceLightNavigationBars(false);
+        bars.setAppearanceLightStatusBars(true);
+        bars.setAppearanceLightNavigationBars(true);
 
         ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
             Insets safe = insets.getInsets(
@@ -151,19 +161,21 @@ public final class MainActivity extends ComponentActivity {
         offlineQueue = new OfflineQueue(this);
 
         configureWebView();
+        installLoadingOverlay();
         installNativeBridge();
 
+        boolean restored = false;
         if (savedInstanceState != null) {
-            webView.restoreState(savedInstanceState);
-        } else {
-            webView.loadUrl(BASE_URL);
+            android.webkit.WebBackForwardList history = webView.restoreState(savedInstanceState);
+            restored = history != null && history.getSize() > 0;
         }
+        if (!restored) webView.loadUrl(BASE_URL);
     }
 
     @SuppressLint("SetJavaScriptEnabled") // SPA requires JS; Native API is restricted to the trusted HTTPS origin.
     private void configureWebView() {
         webView = new WebView(this);
-        webView.setBackgroundColor(Color.rgb(16, 18, 22));
+        webView.setBackgroundColor(Color.WHITE);
         root.addView(webView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -181,7 +193,7 @@ public final class MainActivity extends ComponentActivity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.4.3");
+        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.5.3-staging");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -194,13 +206,32 @@ public final class MainActivity extends ComponentActivity {
                     WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 if (isTrustedUri(uri)) return false;
+                if (isOtherKaretaHost(uri)) {
+                    showLoadError("Тестовая APK не открывает production KARETA.");
+                    return true;
+                }
                 openExternalUri(uri);
                 return true;
             }
 
             @Override
+            public WebResourceResponse shouldInterceptRequest(
+                    WebView view, WebResourceRequest request) {
+                if (isOtherKaretaHost(request.getUrl())) {
+                    return new WebResourceResponse(
+                            "text/plain", "UTF-8", 403, "Forbidden",
+                            Collections.singletonMap("Cache-Control", "no-store"),
+                            new ByteArrayInputStream(
+                                    "Production KARETA blocked in staging APK."
+                                            .getBytes(StandardCharsets.UTF_8)));
+                }
+                return super.shouldInterceptRequest(view, request);
+            }
+
+            @Override
             public void onPageStarted(WebView view, String url,
                                       android.graphics.Bitmap favicon) {
+                showLoadingOverlay();
                 pageLoaded = false;
                 handler.removeCallbacks(pageTimeout);
                 handler.postDelayed(pageTimeout, PAGE_TIMEOUT_MS);
@@ -210,6 +241,13 @@ public final class MainActivity extends ComponentActivity {
             public void onPageFinished(WebView view, String url) {
                 pageLoaded = true;
                 handler.removeCallbacks(pageTimeout);
+                // Visual-state callback keeps the splash visible until WebView paints.
+                view.postVisualStateCallback(0, new WebView.VisualStateCallback() {
+                    @Override
+                    public void onComplete(long requestId) {
+                        if (webView == view) hideLoadingOverlay();
+                    }
+                });
             }
 
             @Override
@@ -241,6 +279,57 @@ public final class MainActivity extends ComponentActivity {
                 return true;
             }
         });
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void installLoadingOverlay() {
+        loadingOverlay = new FrameLayout(this);
+        loadingOverlay.setBackgroundColor(Color.WHITE);
+
+        LinearLayout column = new LinearLayout(this);
+        column.setGravity(Gravity.CENTER);
+        column.setOrientation(LinearLayout.VERTICAL);
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.kareta_mark_vector);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        logo.setContentDescription("Логотип KARETA");
+        column.addView(logo, new LinearLayout.LayoutParams(dp(112), dp(112)));
+
+        TextView label = new TextView(this);
+        label.setText("Kareta.kz - Автосервисы!");
+        label.setTextColor(Color.rgb(35, 35, 35));
+        label.setTextSize(15);
+        label.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        labelParams.topMargin = dp(10);
+        column.addView(label, labelParams);
+
+        ProgressBar progress = new ProgressBar(this);
+        progress.setIndeterminate(true);
+        progress.setIndeterminateTintList(ColorStateList.valueOf(Color.rgb(255, 106, 0)));
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(dp(32), dp(32));
+        progressParams.topMargin = dp(26);
+        column.addView(progress, progressParams);
+
+        FrameLayout.LayoutParams centered = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER);
+        loadingOverlay.addView(column, centered);
+        root.addView(loadingOverlay, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    private void showLoadingOverlay() {
+        if (loadingOverlay != null) loadingOverlay.setVisibility(View.VISIBLE);
+    }
+
+    private void hideLoadingOverlay() {
+        if (loadingOverlay != null) loadingOverlay.setVisibility(View.GONE);
     }
 
     @SuppressLint("RequiresFeature") // Guarded by WebViewFeature.isFeatureSupported below.
@@ -331,6 +420,16 @@ public final class MainActivity extends ComponentActivity {
                 return;
             case "elmDevices":
                 replyOk(reply, id, elm.devices());
+                return;
+            case "elmScanBle":
+                elm.scanBle(bridgeCallback(reply, id));
+                return;
+            case "elmConnectBle":
+                elm.connectBle(payload.optString("address", ""), bridgeCallback(reply, id));
+                return;
+            case "elmConnectWifi":
+                elm.connectWifi(payload.optString("host", ""),
+                        payload.optInt("port", 35000), bridgeCallback(reply, id));
                 return;
             case "elmConnect":
                 elm.connect(payload.optString("address", ""), bridgeCallback(reply, id));
@@ -458,6 +557,12 @@ public final class MainActivity extends ComponentActivity {
             case "bluetooth":
                 if (Build.VERSION.SDK_INT < 31) return new String[0];
                 return new String[]{Manifest.permission.BLUETOOTH_CONNECT};
+            case "bluetooth_scan":
+                if (Build.VERSION.SDK_INT >= 31) {
+                    return new String[]{Manifest.permission.BLUETOOTH_CONNECT,
+                            Manifest.permission.BLUETOOTH_SCAN};
+                }
+                return new String[]{Manifest.permission.ACCESS_FINE_LOCATION};
             case "camera":
                 return new String[]{Manifest.permission.CAMERA};
             case "microphone":
@@ -612,7 +717,8 @@ public final class MainActivity extends ComponentActivity {
                     best = candidate;
                 }
             }
-            if (best != null && System.currentTimeMillis() - best.getTime() < 120000L) {
+            if (best != null && System.currentTimeMillis() - best.getTime() < 300000L
+                    && (!best.hasAccuracy() || best.getAccuracy() <= 3000.0f)) {
                 replyLocation(reply, id, best);
                 return;
             }
@@ -641,15 +747,22 @@ public final class MainActivity extends ComponentActivity {
             replyLocation(reply, id, location);
         };
         try {
-            String provider = manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-                    ? LocationManager.GPS_PROVIDER : LocationManager.NETWORK_PROVIDER;
+            // Nearby discovery needs a prompt coarse fix; GPS remains fallback.
+            String provider = manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+                    ? LocationManager.NETWORK_PROVIDER
+                    : (manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                            ? LocationManager.GPS_PROVIDER : null);
+            if (provider == null) {
+                replyError(reply, id, "LOCATION_DISABLED", "Включите геолокацию в настройках устройства.");
+                return;
+            }
             manager.requestSingleUpdate(provider, holder[0], Looper.getMainLooper());
             handler.postDelayed(() -> {
                 if (completed[0]) return;
                 completed[0] = true;
                 try { manager.removeUpdates(holder[0]); } catch (Throwable ignored) {}
                 replyError(reply, id, "LOCATION_TIMEOUT", "Не удалось получить координаты.");
-            }, 12000L);
+            }, 8000L);
         } catch (Throwable error) {
             replyError(reply, id, "LOCATION_UNAVAILABLE", message(error));
         }
@@ -807,7 +920,11 @@ public final class MainActivity extends ComponentActivity {
     private void openRoute(String path) {
         String value = path == null ? "" : path.trim();
         String url;
-        if (value.startsWith("https://" + BASE_HOST)) {
+        Uri provided = Uri.parse(value);
+        if (provided.getScheme() != null) {
+            if (!isTrustedUri(provided)) {
+                throw new IllegalArgumentException("Маршрут должен вести на s.kareta.kz.");
+            }
             url = value;
         } else if (value.startsWith("#")) {
             url = BASE_URL + value;
@@ -823,6 +940,9 @@ public final class MainActivity extends ComponentActivity {
         String scheme = uri.getScheme();
         if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) {
             throw new IllegalArgumentException("Разрешены только http/https URL.");
+        }
+        if (isOtherKaretaHost(uri)) {
+            throw new IllegalArgumentException("Production KARETA недоступен в тестовой APK.");
         }
         openExternalUri(uri);
     }
@@ -874,6 +994,13 @@ public final class MainActivity extends ComponentActivity {
         }
     }
 
+    private boolean isOtherKaretaHost(Uri uri) {
+        if (uri == null || uri.getHost() == null) return false;
+        String host = uri.getHost().toLowerCase(Locale.ROOT);
+        return ("kareta.kz".equals(host) || host.endsWith(".kareta.kz"))
+                && !BASE_HOST.equalsIgnoreCase(host);
+    }
+
     private boolean isTrustedUri(Uri uri) {
         return uri != null
                 && "https".equalsIgnoreCase(uri.getScheme())
@@ -887,7 +1014,7 @@ public final class MainActivity extends ComponentActivity {
         String safe = escapeHtml(message);
         String html = "<!doctype html><html><head><meta name='viewport' "
                 + "content='width=device-width,initial-scale=1'><style>"
-                + "body{margin:0;background:#101216;color:#fff;font-family:sans-serif;"
+                + "body{margin:0;background:#ffffff;color:#1f2937;font-family:sans-serif;"
                 + "display:grid;place-items:center;min-height:100vh;padding:24px;box-sizing:border-box}"
                 + "main{max-width:520px;text-align:center}h1{font-size:24px}p{opacity:.72;line-height:1.5}"
                 + "button{border:0;border-radius:14px;background:#ff6a00;color:#fff;"
