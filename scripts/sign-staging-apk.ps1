@@ -51,10 +51,14 @@ try {
     $outDir = Split-Path -Parent $OutputApk
     if ($outDir -and -not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
     # apksigner generates a new v2/v3 signature. Keep the same PKCS12 key across future releases.
-    & $signer sign --min-sdk-version 24 --ks $keyStore --ks-key-alias kareta_staging --ks-pass "pass:$password" --key-pass "pass:$password" --out $OutputApk $InputApk
+    $env:KARETA_STAGING_SIGNING_PASSWORD = $password
+    & $signer sign --min-sdk-version 24 --ks $keyStore --ks-key-alias kareta_staging --ks-pass env:KARETA_STAGING_SIGNING_PASSWORD --key-pass env:KARETA_STAGING_SIGNING_PASSWORD --out $OutputApk $InputApk
     if ($LASTEXITCODE -ne 0) { throw 'apksigner sign failed.' }
 }
-finally { $password = $null }
+finally {
+    Remove-Item Env:KARETA_STAGING_SIGNING_PASSWORD -ErrorAction SilentlyContinue
+    $password = $null
+}
 & $signer verify --verbose --print-certs $OutputApk
 if ($LASTEXITCODE -ne 0) { throw 'Signed APK verification failed.' }
 $hash = (Get-FileHash -LiteralPath $OutputApk -Algorithm SHA256).Hash
