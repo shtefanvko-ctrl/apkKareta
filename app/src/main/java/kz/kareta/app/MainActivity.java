@@ -242,8 +242,11 @@ public final class MainActivity extends ComponentActivity {
                 pageLoaded = true;
                 handler.removeCallbacks(pageTimeout);
                 // Visual-state callback keeps the splash visible until WebView paints.
-                view.postVisualStateCallback(0, requestId -> {
-                    if (webView == view) hideLoadingOverlay();
+                view.postVisualStateCallback(0, new WebView.VisualStateCallback() {
+                    @Override
+                    public void onComplete(long requestId) {
+                        if (webView == view) hideLoadingOverlay();
+                    }
                 });
             }
 
@@ -698,7 +701,8 @@ public final class MainActivity extends ComponentActivity {
                     best = candidate;
                 }
             }
-            if (best != null && System.currentTimeMillis() - best.getTime() < 120000L) {
+            if (best != null && System.currentTimeMillis() - best.getTime() < 300000L
+                    && (!best.hasAccuracy() || best.getAccuracy() <= 3000.0f)) {
                 replyLocation(reply, id, best);
                 return;
             }
@@ -727,15 +731,22 @@ public final class MainActivity extends ComponentActivity {
             replyLocation(reply, id, location);
         };
         try {
-            String provider = manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-                    ? LocationManager.GPS_PROVIDER : LocationManager.NETWORK_PROVIDER;
+            // Nearby discovery needs a prompt coarse fix; GPS remains fallback.
+            String provider = manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+                    ? LocationManager.NETWORK_PROVIDER
+                    : (manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                            ? LocationManager.GPS_PROVIDER : null);
+            if (provider == null) {
+                replyError(reply, id, "LOCATION_DISABLED", "Включите геолокацию в настройках устройства.");
+                return;
+            }
             manager.requestSingleUpdate(provider, holder[0], Looper.getMainLooper());
             handler.postDelayed(() -> {
                 if (completed[0]) return;
                 completed[0] = true;
                 try { manager.removeUpdates(holder[0]); } catch (Throwable ignored) {}
                 replyError(reply, id, "LOCATION_TIMEOUT", "Не удалось получить координаты.");
-            }, 12000L);
+            }, 8000L);
         } catch (Throwable error) {
             replyError(reply, id, "LOCATION_UNAVAILABLE", message(error));
         }
