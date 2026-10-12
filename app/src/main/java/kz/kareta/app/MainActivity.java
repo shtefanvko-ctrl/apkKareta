@@ -193,7 +193,7 @@ public final class MainActivity extends ComponentActivity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.5.1-staging");
+        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.5.2-staging");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -300,7 +300,7 @@ public final class MainActivity extends ComponentActivity {
         column.addView(logo, new LinearLayout.LayoutParams(dp(112), dp(112)));
 
         TextView label = new TextView(this);
-        label.setText("KARETA STAGING");
+        label.setText("Kareta.kz - Автосервисы!");
         label.setTextColor(Color.rgb(35, 35, 35));
         label.setTextSize(15);
         label.setGravity(Gravity.CENTER);
