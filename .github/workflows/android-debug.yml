@@ -44,6 +44,8 @@ jobs:
 
           app = Path("app/build.gradle.kts").read_text()
           manifest = Path("app/src/main/AndroidManifest.xml").read_text()
+          theme = Path("app/src/main/res/values/styles.xml").read_text()
+          splash = Path("app/src/main/res/values-v31/styles.xml").read_text()
           source_dir = Path("app/src/main/java")
           activity = (source_dir / "kz/kareta/app/MainActivity.java").read_text()
           required = {
@@ -55,6 +57,13 @@ jobs:
               "staging native bridge": 'Collections.singleton("https://" + BASE_HOST)' in activity,
               "production navigation gate": "if (isOtherKaretaHost(uri))" in activity,
               "production web-request gate": "if (isOtherKaretaHost(request.getUrl()))" in activity,
+              "white startup theme": '<item name="android:windowBackground">@color/kareta_splash_bg</item>' in theme,
+              "bounded splash mark": '@drawable/ic_launcher_foreground' in splash,
+              "white native WebView": "webView.setBackgroundColor(Color.WHITE)" in activity,
+              "loading surface": "installLoadingOverlay();" in activity,
+              "visual-ready handoff": "new WebView.VisualStateCallback()" in activity,
+              "restore state fallback": "if (!restored) webView.loadUrl(BASE_URL);" in activity,
+              "network-first GEO": "manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)" in activity,
           }
           for name, passed in required.items():
               print(f"{'PASS' if passed else 'FAIL'}: {name}")
