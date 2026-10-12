@@ -12,6 +12,9 @@ import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.Build;
 
 import org.json.JSONArray;
@@ -291,8 +294,24 @@ final class Elm327Manager {
         if (!(address instanceof java.net.Inet4Address) || !address.isSiteLocalAddress()) {
             throw new IllegalArgumentException("Разрешены только приватные IPv4 адреса Wi-Fi адаптеров.");
         }
+        ConnectivityManager manager =
+                (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        Network wifiNetwork = null;
+        if (manager != null) {
+            for (Network network : manager.getAllNetworks()) {
+                NetworkCapabilities caps = manager.getNetworkCapabilities(network);
+                if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                    wifiNetwork = network;
+                    break;
+                }
+            }
+        }
+        if (wifiNetwork == null) {
+            throw new IllegalStateException("Подключите Android к Wi-Fi сети ELM327 (интернет не обязателен).");
+        }
         closeSocket(false);
-        Socket candidate = new Socket();
+        // Bind directly to Wi-Fi even if Android prefers mobile data without a Wi-Fi uplink.
+        Socket candidate = wifiNetwork.getSocketFactory().createSocket();
         try {
             candidate.connect(new InetSocketAddress(address, port), 7000);
             candidate.setSoTimeout(8000);
