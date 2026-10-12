@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0-staging (10) — isolated staging APK
+
+- New `kz.kareta.app.staging` package and `KARETA STAGING` label; can coexist with production.
+- WebView home and Native API 6 remain bound to `https://s.kareta.kz/`.
+- Blocks first-party KARETA production subresource requests, navigation and Native API requests to open production links.
+- Rejects untrusted absolute routes using parsed URL origins, not string prefixes.
+- Updates Android user agent and GitHub Actions build artifact to 1.5.0-staging.
+- Adds build-time staging-host checks; preserves Bluetooth ELM327, GPS, QR, camera, contacts, notifications and offline diagnostics queue unchanged.
+- CI build is not a physical-device test; live staging availability must pass before rollout.
+
 ## 1.4.3 — WebView media hardening
 
 - Declares the FileProvider required by native and WebView camera capture.
