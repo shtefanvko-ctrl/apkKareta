@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.3-staging (13) — transport-agnostic ELM327
+
+- Bluetooth Classic SPP: paired devices, secure RFCOMM with insecure fallback for compatible paired clone adapters.
+- BLE: active scanner (with Android 12+ BLUETOOTH_SCAN permission), GATT UART with NUS, HM-10/FFE1, FFF0/FFF1/FFF2 and Vgate service profiles.
+- Wi-Fi: direct TCP to a user-provided RFC1918 IPv4/port; public Internet targets are deliberately rejected.
+- All transports reuse the existing read-only Native API 6, command allowlist, ELM initialization, DTC/VIN/PID sampling and offline queue.
+- Reconnect remembers adapter type and last selected address/host/port.
+- USB OTG serial controllers, proprietary ABS/SRS protocols and universal OBDLink compatibility are **not implemented**.
+- CI lint/assemble is not a physical ELM/ECU acceptance test. The user-installable candidate must be signed with the existing locally stored staging key.
+
 ## 1.5.2-staging (12) — display name and durable signing
 
 - Application name changed to **Kareta.kz - Автосервисы!**, preserving the existing KARETA icon and staging package ID.
