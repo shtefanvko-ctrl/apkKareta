@@ -193,7 +193,7 @@ public final class MainActivity extends ComponentActivity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.5.2-staging");
+        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.5.3-staging");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -421,6 +421,16 @@ public final class MainActivity extends ComponentActivity {
             case "elmDevices":
                 replyOk(reply, id, elm.devices());
                 return;
+            case "elmScanBle":
+                elm.scanBle(bridgeCallback(reply, id));
+                return;
+            case "elmConnectBle":
+                elm.connectBle(payload.optString("address", ""), bridgeCallback(reply, id));
+                return;
+            case "elmConnectWifi":
+                elm.connectWifi(payload.optString("host", ""),
+                        payload.optInt("port", 35000), bridgeCallback(reply, id));
+                return;
             case "elmConnect":
                 elm.connect(payload.optString("address", ""), bridgeCallback(reply, id));
                 return;
@@ -547,6 +557,12 @@ public final class MainActivity extends ComponentActivity {
             case "bluetooth":
                 if (Build.VERSION.SDK_INT < 31) return new String[0];
                 return new String[]{Manifest.permission.BLUETOOTH_CONNECT};
+            case "bluetooth_scan":
+                if (Build.VERSION.SDK_INT >= 31) {
+                    return new String[]{Manifest.permission.BLUETOOTH_CONNECT,
+                            Manifest.permission.BLUETOOTH_SCAN};
+                }
+                return new String[]{Manifest.permission.ACCESS_FINE_LOCATION};
             case "camera":
                 return new String[]{Manifest.permission.CAMERA};
             case "microphone":
