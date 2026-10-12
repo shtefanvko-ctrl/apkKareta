@@ -68,7 +68,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Locale;
 
@@ -181,7 +183,7 @@ public final class MainActivity extends ComponentActivity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.4.3");
+        settings.setUserAgentString(settings.getUserAgentString() + " KARETA-Android/1.5.0-staging");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -194,8 +196,26 @@ public final class MainActivity extends ComponentActivity {
                     WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 if (isTrustedUri(uri)) return false;
+                if (isOtherKaretaHost(uri)) {
+                    showLoadError("Тестовая APK не открывает production KARETA.");
+                    return true;
+                }
                 openExternalUri(uri);
                 return true;
+            }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(
+                    WebView view, WebResourceRequest request) {
+                if (isOtherKaretaHost(request.getUrl())) {
+                    return new WebResourceResponse(
+                            "text/plain", "UTF-8", 403, "Forbidden",
+                            Collections.singletonMap("Cache-Control", "no-store"),
+                            new ByteArrayInputStream(
+                                    "Production KARETA blocked in staging APK."
+                                            .getBytes(StandardCharsets.UTF_8)));
+                }
+                return super.shouldInterceptRequest(view, request);
             }
 
             @Override
@@ -807,7 +827,11 @@ public final class MainActivity extends ComponentActivity {
     private void openRoute(String path) {
         String value = path == null ? "" : path.trim();
         String url;
-        if (value.startsWith("https://" + BASE_HOST)) {
+        Uri provided = Uri.parse(value);
+        if (provided.getScheme() != null) {
+            if (!isTrustedUri(provided)) {
+                throw new IllegalArgumentException("Маршрут должен вести на s.kareta.kz.");
+            }
             url = value;
         } else if (value.startsWith("#")) {
             url = BASE_URL + value;
@@ -823,6 +847,9 @@ public final class MainActivity extends ComponentActivity {
         String scheme = uri.getScheme();
         if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) {
             throw new IllegalArgumentException("Разрешены только http/https URL.");
+        }
+        if (isOtherKaretaHost(uri)) {
+            throw new IllegalArgumentException("Production KARETA недоступен в тестовой APK.");
         }
         openExternalUri(uri);
     }
@@ -872,6 +899,13 @@ public final class MainActivity extends ComponentActivity {
         } else {
             vibrator.vibrate(duration);
         }
+    }
+
+    private boolean isOtherKaretaHost(Uri uri) {
+        if (uri == null || uri.getHost() == null) return false;
+        String host = uri.getHost().toLowerCase(Locale.ROOT);
+        return ("kareta.kz".equals(host) || host.endsWith(".kareta.kz"))
+                && !BASE_HOST.equalsIgnoreCase(host);
     }
 
     private boolean isTrustedUri(Uri uri) {
