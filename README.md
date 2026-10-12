@@ -1,6 +1,6 @@
 # KARETA.KZ — Android shell
 
-Staging shell candidate: 1.5.0-staging (10)
+Staging shell candidate: 1.5.1-staging (11)
 Staging Application ID: `kz.kareta.app.staging` (installs alongside production)
 Previous shell: 1.4.3 (9)
 Web origin: `https://s.kareta.kz/`
@@ -33,3 +33,13 @@ durable offline queue are included in the verified shell.
 - CI gates: staging-source isolation, lintDebug and assembleDebug. Device-only acceptance (camera, QR, geolocation, Bluetooth ELM327 and offline replay) remains separate until exercised on a physical Android device.
 
 Install the CI-generated debug APK on a test handset. It must open **s.kareta.kz** over HTTPS, with no production fallback. Do not publish a production release from this branch.
+
+### 1.5.1 staging UX hotfix
+
+- Native and Android 12 system splash now use the same white background and a bounded KARETA mark.
+- The WebView root no longer draws an empty dark frame before the first visual state is committed.
+- A small branded loading overlay remains visible until WebView has painted.
+- If Android fails to restore WebView history, the shell loads the staging start URL.
+- Location now prioritizes fast network location over slow GPS for nearby discovery (GPS remains a fallback), accepts reasonably accurate recent positions and times out after eight seconds.
+- Backend OTP provider configuration is owned by the staging PHP deployment, not the APK. The application must not bypass identity security if SMS is absent.
+- On GitHub-hosted CI, the Android debug keystore may differ between builds: if the existing staging app cannot be upgraded, uninstall **only KARETA STAGING** before installing the new debug APK. This clears local staging cookies.
