@@ -4,11 +4,16 @@ on:
   push:
     branches:
       - main
+      - "release/staging-apk-*"
     paths:
       - "app/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle.properties"
+      - ".github/workflows/android-debug.yml"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch: {}
 
 permissions:
@@ -30,6 +35,41 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
+      - name: Verify staging-only build contract
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          app = Path("app/build.gradle.kts").read_text()
+          manifest = Path("app/src/main/AndroidManifest.xml").read_text()
+          source_dir = Path("app/src/main/java")
+          activity = (source_dir / "kz/kareta/app/MainActivity.java").read_text()
+          required = {
+              "staging app id": 'applicationId = "kz.kareta.app.staging"' in app,
+              "staging version": 'versionName = "1.5.0-staging"' in app,
+              "versionCode": "versionCode = 10" in app,
+              "visible staging label": 'android:label="KARETA STAGING"' in manifest,
+              "staging origin": 'BASE_URL = "https://s.kareta.kz/"' in activity,
+              "staging native bridge": 'Collections.singleton("https://" + BASE_HOST)' in activity,
+              "production navigation gate": "if (isOtherKaretaHost(uri))" in activity,
+              "production web-request gate": "if (isOtherKaretaHost(request.getUrl()))" in activity,
+          }
+          for name, passed in required.items():
+              print(f"{'PASS' if passed else 'FAIL'}: {name}")
+          if not all(required.values()):
+              raise SystemExit(1)
+          bad = []
+          for file in source_dir.rglob("*.java"):
+              for target in re.findall(r'https?://[a-zA-Z0-9.-]+', file.read_text()):
+                  host = target.split("://", 1)[1].lower()
+                  if (host == "kareta.kz" or host.endswith(".kareta.kz")) and host != "s.kareta.kz":
+                      bad.append((str(file), target))
+          if bad:
+              raise SystemExit(f"Unexpected first-party production URLs: {bad}")
+          print("PASS: no hard-coded production KARETA hosts in Java")
+          PY
       - name: Lint debug
         shell: bash
         run: |
@@ -44,6 +84,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KARETA-1.4.3-debug
+          name: KARETA-1.5.0-staging-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
