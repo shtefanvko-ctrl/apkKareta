@@ -50,8 +50,8 @@ jobs:
           activity = (source_dir / "kz/kareta/app/MainActivity.java").read_text()
           required = {
               "staging app id": 'applicationId = "kz.kareta.app.staging"' in app,
-              "staging version": 'versionName = "1.5.2-staging"' in app,
-              "versionCode": "versionCode = 12" in app,
+              "staging version": 'versionName = "1.5.3-staging"' in app,
+              "versionCode": "versionCode = 13" in app,
               "visible staging label": 'android:label="Kareta.kz - Автосервисы!"' in manifest,
               "staging origin": 'BASE_URL = "https://s.kareta.kz/"' in activity,
               "staging native bridge": 'Collections.singleton("https://" + BASE_HOST)' in activity,
@@ -64,6 +64,11 @@ jobs:
               "visual-ready handoff": "new WebView.VisualStateCallback()" in activity,
               "restore state fallback": "if (!restored) webView.loadUrl(BASE_URL);" in activity,
               "network-first GEO": "manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)" in activity,
+              "BLE permission": "android.permission.BLUETOOTH_SCAN" in manifest,
+              "BLE serial profile": Path("app/src/main/java/kz/kareta/app/BleElmSerial.java").exists(),
+              "BLE scan native call": 'case "elmScanBle":' in activity,
+              "BLE connect native call": 'case "elmConnectBle":' in activity,
+              "WiFi connect native call": 'case "elmConnectWifi":' in activity,
           }
           for name, passed in required.items():
               print(f"{'PASS' if passed else 'FAIL'}: {name}")
@@ -93,6 +98,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KARETA-1.5.2-staging-CI-UNSTABLE-SIGNATURE
+          name: KARETA-1.5.3-staging-CI-UNSTABLE-SIGNATURE
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
