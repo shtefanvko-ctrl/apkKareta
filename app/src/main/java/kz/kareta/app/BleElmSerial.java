@@ -34,6 +34,9 @@ final class BleElmSerial {
     private static final UUID NUS_NOTIFY = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
     private static final UUID HM10 = UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb");
     private static final UUID HM10_IO = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb");
+    private static final UUID FFF0 = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb");
+    private static final UUID FFF1 = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb");
+    private static final UUID FFF2 = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb");
     private static final UUID VGATE = UUID.fromString("e7810a71-73ae-499d-8c15-faa9aef0c3f2");
     private static final UUID VGATE_WRITE = UUID.fromString("e7810a72-73ae-499d-8c15-faa9aef0c3f2");
     private static final UUID VGATE_NOTIFY = UUID.fromString("e7810a73-73ae-499d-8c15-faa9aef0c3f2");
@@ -135,6 +138,14 @@ final class BleElmSerial {
                 notify = service.getCharacteristic(NUS_NOTIFY);
             } else if (HM10.equals(service.getUuid())) {
                 write = notify = service.getCharacteristic(HM10_IO);
+            } else if (FFF0.equals(service.getUuid())) {
+                write = service.getCharacteristic(FFF2);
+                notify = service.getCharacteristic(FFF1);
+                if (!canWrite(write) || !canNotify(notify)) {
+                    BluetoothGattCharacteristic temp = write;
+                    write = notify;
+                    notify = temp;
+                }
             } else if (VGATE.equals(service.getUuid())) {
                 write = service.getCharacteristic(VGATE_WRITE);
                 notify = service.getCharacteristic(VGATE_NOTIFY);
@@ -150,7 +161,7 @@ final class BleElmSerial {
                 return true;
             }
         }
-        error = "Неизвестный BLE UART профиль; поддерживаются NUS, FFE0, Vgate.";
+        error = "Неизвестный BLE UART профиль; поддерживаются NUS, FFE0/FFF0, Vgate.";
         return false;
     }
 
