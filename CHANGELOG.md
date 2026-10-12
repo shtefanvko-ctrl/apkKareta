@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.1-staging (11) — Android startup and location hotfix
+
+- Removes the dark startup root, makes Android system splash and WebView paint white, and scales the splash mark consistently.
+- Shows a branded native progress overlay until WebView reports a completed visual state, preventing blank black intermediary frames.
+- Falls back to https://s.kareta.kz/ when activity state restoration lacks valid navigation history.
+- Prefers network-based coarse location for nearby listings, with GPS fallback and an eight-second timeout.
+- Preserves production-host blockade, API origin lock, ELM327/QR/camera permissions and 1.5.0 staging isolation.
+- Leaves PHP staging SMS delivery/provider configuration unchanged. Service-side diagnosis is separate.
+
 ## 1.5.0-staging (10) — isolated staging APK
 
 - New `kz.kareta.app.staging` package and `KARETA STAGING` label; can coexist with production.
