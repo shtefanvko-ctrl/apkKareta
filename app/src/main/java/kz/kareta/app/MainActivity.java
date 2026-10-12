@@ -998,7 +998,7 @@ public final class MainActivity extends ComponentActivity {
         String safe = escapeHtml(message);
         String html = "<!doctype html><html><head><meta name='viewport' "
                 + "content='width=device-width,initial-scale=1'><style>"
-                + "body{margin:0;background:#101216;color:#fff;font-family:sans-serif;"
+                + "body{margin:0;background:#ffffff;color:#1f2937;font-family:sans-serif;"
                 + "display:grid;place-items:center;min-height:100vh;padding:24px;box-sizing:border-box}"
                 + "main{max-width:520px;text-align:center}h1{font-size:24px}p{opacity:.72;line-height:1.5}"
                 + "button{border:0;border-radius:14px;background:#ff6a00;color:#fff;"
