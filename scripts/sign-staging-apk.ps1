@@ -11,6 +11,9 @@ $sdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk\build-tools\36.1.0'
 $aapt = Join-Path $sdk 'aapt.exe'
 $signer = Join-Path $sdk 'apksigner.bat'
 $keytool = 'C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe'
+$javaHome = Split-Path (Split-Path $keytool -Parent) -Parent
+if (-not (Test-Path -LiteralPath (Join-Path $javaHome 'bin\java.exe'))) { throw 'Java runtime missing' }
+$env:JAVA_HOME = $javaHome
 foreach ($executable in @($aapt, $signer, $keytool)) {
     if (-not (Test-Path -LiteralPath $executable)) { throw "Missing required tool: $executable" }
 }
