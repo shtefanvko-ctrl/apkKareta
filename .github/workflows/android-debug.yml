@@ -93,6 +93,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KARETA-1.5.2-staging-debug
+          name: KARETA-1.5.2-staging-CI-UNSTABLE-SIGNATURE
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
