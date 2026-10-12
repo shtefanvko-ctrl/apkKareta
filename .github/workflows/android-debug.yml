@@ -48,8 +48,8 @@ jobs:
           activity = (source_dir / "kz/kareta/app/MainActivity.java").read_text()
           required = {
               "staging app id": 'applicationId = "kz.kareta.app.staging"' in app,
-              "staging version": 'versionName = "1.5.0-staging"' in app,
-              "versionCode": "versionCode = 10" in app,
+              "staging version": 'versionName = "1.5.1-staging"' in app,
+              "versionCode": "versionCode = 11" in app,
               "visible staging label": 'android:label="KARETA STAGING"' in manifest,
               "staging origin": 'BASE_URL = "https://s.kareta.kz/"' in activity,
               "staging native bridge": 'Collections.singleton("https://" + BASE_HOST)' in activity,
@@ -84,6 +84,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KARETA-1.5.0-staging-debug
+          name: KARETA-1.5.1-staging-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
