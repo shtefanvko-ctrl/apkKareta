@@ -5,11 +5,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "kz.kareta.app"
+        applicationId = "kz.kareta.app.staging"
         minSdk = 24
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.4.3"
+        versionCode = 12
+        versionName = "1.5.2-staging"
     }
 
     buildTypes {
