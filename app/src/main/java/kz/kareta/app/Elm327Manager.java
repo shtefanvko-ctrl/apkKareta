@@ -448,28 +448,21 @@ final class Elm327Manager {
 
         closeSocket(false);
         BluetoothDevice device = adapter.getRemoteDevice(address);
-        BluetoothSocket candidate = device.createRfcommSocketToServiceRecord(SPP_UUID);
-        Future<?> future = connector.submit(() -> {
-            try {
-                candidate.connect();
-            } catch (Exception error) {
-                throw new RuntimeException(error);
-            }
-        });
-
+        BluetoothSocket candidate = null;
         try {
-            future.get(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException error) {
-            future.cancel(true);
-            try { candidate.close(); } catch (Exception ignored) {}
-            throw new Exception("Таймаут подключения ELM327 (" + CONNECT_TIMEOUT_MS + " мс).");
-        } catch (ExecutionException error) {
-            try { candidate.close(); } catch (Exception ignored) {}
-            Throwable cause = error.getCause();
-            if (cause instanceof RuntimeException && cause.getCause() != null) {
-                cause = cause.getCause();
+            candidate = device.createRfcommSocketToServiceRecord(SPP_UUID);
+            connectRfcomm(candidate);
+        } catch (Exception secureFailure) {
+            if (candidate != null) try { candidate.close(); } catch (Exception ignored) {}
+            // Paired ELM clones sometimes support only an insecure RFCOMM socket.
+            try {
+                candidate = device.createInsecureRfcommSocketToServiceRecord(SPP_UUID);
+                connectRfcomm(candidate);
+            } catch (Exception insecureFailure) {
+                if (candidate != null) try { candidate.close(); } catch (Exception ignored) {}
+                throw new Exception("Bluetooth SPP (secure/insecure): "
+                        + message(secureFailure) + " / " + message(insecureFailure));
             }
-            throw new Exception(message(cause));
         }
 
         synchronized (socketLock) {
@@ -484,6 +477,30 @@ final class Elm327Manager {
         state = State.ADAPTER_CONNECTED;
         lastError = "";
         saveLastDevice();
+    }
+
+    private void connectRfcomm(BluetoothSocket candidate) throws Exception {
+        Future<?> future = connector.submit(() -> {
+            try { candidate.connect(); }
+            catch (Exception error) { throw new RuntimeException(error); }
+        });
+        try {
+            future.get(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException error) {
+            future.cancel(true);
+            try { candidate.close(); } catch (Exception ignored) {}
+            throw new Exception("Таймаут Bluetooth SPP (" + CONNECT_TIMEOUT_MS + " мс).");
+        } catch (ExecutionException error) {
+            try { candidate.close(); } catch (Exception ignored) {}
+            Throwable cause = error.getCause();
+            if (cause instanceof RuntimeException && cause.getCause() != null) cause = cause.getCause();
+            throw new Exception(message(cause));
+        } catch (InterruptedException error) {
+            future.cancel(true);
+            try { candidate.close(); } catch (Exception ignored) {}
+            Thread.currentThread().interrupt();
+            throw error;
+        }
     }
 
     private String commandDirect(String command, int timeoutMs) throws Exception {
