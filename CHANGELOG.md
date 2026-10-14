@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.4 (10) — Native document OCR candidate (not deployed)
+
+- Adds bounded, privacy-preserving on-device ML Kit Latin OCR through a guarded Native API 7 command.
+- Accepts at most 1.5 MB decoded image and only a trusted-origin main-frame bridge call.
+- Returns allowlisted vehicle fields, not owner identity or raw text; no photo upload/storage.
+- Preserves Native API 6 methods, existing ELM327 and Android camera contracts.
+- Debug CI supports pull requests; device/OCR accuracy validation still required.
+
 ## 1.4.3 — WebView media hardening
 
 - Declares the FileProvider required by native and WebView camera capture.

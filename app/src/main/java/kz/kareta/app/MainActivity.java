@@ -75,7 +75,7 @@ import java.util.Locale;
 public final class MainActivity extends ComponentActivity {
     private static final String BASE_URL = "https://s.kareta.kz/";
     private static final String BASE_HOST = "s.kareta.kz";
-    private static final int NATIVE_API_VERSION = 6;
+    private static final int NATIVE_API_VERSION = 7;
     private static final int REQ_PERMISSION = 4101;
     private static final int REQ_IMAGE_PICK = 4102;
     private static final int REQ_CAMERA = 4103;
@@ -321,6 +321,20 @@ public final class MainActivity extends ComponentActivity {
                 return;
             case "scanCode":
                 scanCode(payload.optString("mode", "qr"), reply, id);
+                return;
+            case "recognizeDocumentImage":
+                DocumentOcr.recognize(payload.optString("imageBase64", ""),
+                        payload.optJSONArray("catalog"), new DocumentOcr.Callback() {
+                            @Override
+                            public void success(JSONObject fields) {
+                                replyOk(reply, id, json("fields", fields, "engine", "mlkit-latin-on-device"));
+                            }
+
+                            @Override
+                            public void error(String code) {
+                                replyError(reply, id, code, "Document recognition failed on device.");
+                            }
+                        });
                 return;
             case "actionSheet":
                 actionSheet(payload, reply, id);
@@ -774,7 +788,7 @@ public final class MainActivity extends ComponentActivity {
                     .put("elm327").put("camera").put("images")
                     .put("contacts").put("location").put("scanner")
                     .put("actionSheet").put("offlineQueue")
-                    .put("webFileChooser").put("webCamera")
+                    .put("webFileChooser").put("webCamera").put("documentOcr")
                     .put("webMicrophone").put("webGeolocation"));
         } catch (Exception ignored) {}
         return out;

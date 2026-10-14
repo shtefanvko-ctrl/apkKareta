@@ -1,6 +1,8 @@
 name: Android Debug APK
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches:
       - main
@@ -39,11 +41,13 @@ jobs:
           REPORT="app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt"
           if [ -f "$REPORT" ]; then cat "$REPORT"; fi
           exit $STATUS
+      - name: Local OCR parser tests
+        run: gradle --no-daemon :app:testDebugUnitTest
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KARETA-1.4.3-debug
+          name: KARETA-1.4.4-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
