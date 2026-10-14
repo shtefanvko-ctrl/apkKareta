@@ -41,6 +41,8 @@ jobs:
           REPORT="app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt"
           if [ -f "$REPORT" ]; then cat "$REPORT"; fi
           exit $STATUS
+      - name: Local OCR parser tests
+        run: gradle --no-daemon :app:testDebugUnitTest
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload APK
