@@ -1,23 +1,7 @@
 # KARETA.KZ — Android shell
 
-Current shell: 1.4.3 (9)
-Application ID: `kz.kareta.app`
-Web origin: `https://s.kareta.kz/`
-Native API: 6
-Hosted diagnostics: `https://s.kareta.kz/#/diagnostics`
+Current candidate: **1.4.4 (10)** (draft native OCR integration). Application ID: `kz.kareta.app`. Web origin: `https://s.kareta.kz/`. Native API **7** (compatible with Web minimum API 6).
 
-Architecture: the UI is owned by `s.kareta.kz`; Android is the native WebView/hardware bridge for Bluetooth/ELM327, camera, scanner, notifications, location, contacts and other device capabilities.
+The native shell owns hardware/device capabilities; all UI and vehicle saving remain in the web SPA. Android **7** adds optional `documentOcr` capability and command `recognizeDocumentImage` with `{imageBase64, catalog}`. It returns **only** `{fields, engine}`. It never uploads or persists registration document photos and does not send raw document text, owner name or IIN to JavaScript. The embedded Latin ML Kit model provides offline OCR for Latin VIN/plates/brands; Cyrillic/Kazakh recognition remains a known limitation. Users must review every proposed field before garage saving.
 
-1.4.3 hardens Android system insets, async permissions, ELM327 Classic SPP transport/state handling, connect timeouts and durable offline synchronization. Native duplicate ELM327 UI has been removed from the offline screen.
-
-Generated build output, `.gradle`, `build/`, APKs, local.properties, signing material and nested release ZIPs do not belong in Git.
-
-See `CHANGELOG.md` and `docs/V1_4_2_ANDROID_BRIDGE_HARDENING.md`.
-
-
-### 1.4.3 verification
-
-GitHub Actions requires both `lintDebug` and `assembleDebug` before publishing the debug APK.
-WebView file inputs, native camera capture, trusted-origin camera/microphone permissions,
-geolocation prompts, predictive back navigation, renderer recovery, ELM327 and the
-durable offline queue are included in the verified shell.
+Camera, Bluetooth ELM327, route and offline queue contracts remain unchanged. No staging deployment, production release, signing change or Play Store upload occurs from this draft PR. Build with GitHub Actions lintDebug/assembleDebug and validate on a physical Android device before release.
