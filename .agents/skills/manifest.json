@@ -1,0 +1,14 @@
+{
+  "schema": "kareta.android.agent-skills.v1",
+  "skills": [
+    "android-shell-orchestrator",
+    "android-native-api6-contract",
+    "android-elm327-transport",
+    "android-permissions-device",
+    "android-apk-release",
+    "android-verification-audit",
+    "android-devil-review"
+  ],
+  "nativeApi": 6,
+  "noDuplicateSkills": true
+}
