@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.5 — Production web origin
+
+- Replace legacy `s.kareta.kz` URL with the main `https://kareta.kz/` site.
+- Restrict Native API 6, camera/microphone and geolocation permissions to the new trusted origin.
+- Reject external full URLs from the native `openRoute` command and keep strict HTTPS host checks.
+- Update Android User-Agent and build metadata to version 1.4.5 (11).
+- No new native ELM transport or OCR capabilities are included in this release.
+
+
 ## 1.4.3 — WebView media hardening
 
 - Declares the FileProvider required by native and WebView camera capture.

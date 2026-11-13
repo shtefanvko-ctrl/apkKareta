@@ -8,8 +8,8 @@ android {
         applicationId = "kz.kareta.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.4.3"
+        versionCode = 11
+        versionName = "1.4.5"
     }
 
     buildTypes {
